@@ -19,21 +19,42 @@ SR = 16000
 FRAME = 480  # 30 ms a 16 kHz
 FRAME_S = FRAME / SR
 
-APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sonorus"
-NEON_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Neon Minutes"
+WIN, MAC = sys.platform == "win32", sys.platform == "darwin"
+_XDG = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+# dati di Sonorus: Windows %LOCALAPPDATA%, macOS Application Support, Linux ~/.local/share
+APPDATA = (Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sonorus" if WIN else
+           Path.home() / "Library" / "Application Support" / "Sonorus" if MAC else _XDG / "sonorus")
+# dati e modelli di Neon Minutes (Windows e Linux; su macOS Neon non esiste)
+NEON_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Neon Minutes" if WIN else _XDG / "neon-minutes"
 # Neon Minutes sta nella cartella di Sonorus (neon-minutes\); la vecchia posizione
 # dell'installer resta come ripiego. SONORUS_NEON permette di indicarne un'altra.
 NEON_APP = next((p for p in (Path(os.environ.get("SONORUS_NEON", "")) if os.environ.get("SONORUS_NEON") else None,
                              Path(__file__).resolve().parent / "neon-minutes",
-                             Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "Neon Minutes")
+                             Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "Neon Minutes",
+                             Path.home() / ".local" / "lib" / "neon-minutes")
                  if p and (p / "meeting_transcriber").is_dir()),
                 Path(__file__).resolve().parent / "neon-minutes")
 # un'unica cartella di modelli, condivisa con il motore di Neon Minutes
 MODEL_DIR = NEON_DATA / "modelli" / "hub" if NEON_APP.exists() else APPDATA / "modelli"
 
 
+def neon_python():
+    """Il Python di Neon Minutes: runtime\\python.exe su Windows, runtime/bin/python3 su Linux."""
+    return NEON_APP / "runtime" / ("python.exe" if WIN else "bin/python3")
+
+
 def _add_cuda_dlls():
-    """Rende visibili a ctranslate2 le DLL di cuBLAS/cuDNN installate via pip."""
+    """Rende visibili a ctranslate2 le librerie cuBLAS/cuDNN installate via pip."""
+    if sys.platform.startswith("linux"):
+        # su Linux non c'è add_dll_directory: si caricano prima, globalmente, le .so dei pacchetti nvidia
+        import ctypes
+        for root in (Path(p) for p in sys.path if p.endswith("site-packages")):
+            for lib in sorted(glob.glob(str(root / "nvidia" / "*" / "lib" / "lib*.so*"))):
+                try:
+                    ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
+                except OSError:
+                    pass
+        return
     if sys.platform != "win32":
         return
     roots = [Path(p) for p in sys.path if p.endswith("site-packages")]
@@ -89,7 +110,30 @@ def get_pa(refresh=False):
         return _PA
 
 
+LOOPBACK_HINT = re.compile(r"blackhole|loopback|soundflower|vb-?cable|aggregate|monitor of", re.I)
+
+
 def list_devices(refresh=False):
+    """Sorgenti audio: «outputs» = ciò che esce dal PC (gli altri), «mics» = il tuo microfono.
+    Windows: loopback WASAPI. Linux: i «Monitor of …» di PulseAudio/PipeWire. macOS non registra l'audio
+    di sistema: serve un dispositivo virtuale (BlackHole, Loopback) impostato come uscita multipla."""
+    if not WIN:
+        import soundcard as sc
+        try:
+            dmic = sc.default_microphone().id
+        except Exception:  # noqa: BLE001
+            dmic = None
+        try:
+            dspk = sc.default_speaker().name
+        except Exception:  # noqa: BLE001
+            dspk = ""
+        outs, mics = [], []
+        for m in sc.all_microphones(include_loopback=True):
+            if getattr(m, "isloopback", False) or LOOPBACK_HINT.search(m.name):
+                outs.append({"index": m.id, "name": m.name, "default": bool(dspk) and dspk in m.name})
+            else:
+                mics.append({"index": m.id, "name": m.name, "default": m.id == dmic})
+        return {"outputs": outs, "mics": mics, "platform": sys.platform}
     import pyaudiowpatch as pa
     p = get_pa(refresh)
     wasapi = p.get_host_api_info_by_type(pa.paWASAPI)
@@ -208,6 +252,8 @@ class Capture(threading.Thread):
         self.muted = False  # in pausa: nel wav va silenzio e niente arriva al trascrittore
 
     def run(self):
+        if not WIN:
+            return self._run_soundcard()
         import pyaudiowpatch as pa
         import soxr
         if sys.platform == "win32":
@@ -269,6 +315,60 @@ class Capture(threading.Thread):
             if wav:
                 wav.close()
             self.seg.flush()
+
+
+def _dev(v):
+    """Indice PortAudio (Windows) oppure id del dispositivo soundcard (Linux, macOS)."""
+    if WIN:
+        return int(v)
+    return str(v)
+
+
+def _capture_soundcard(self):
+    """Cattura con soundcard (PulseAudio/PipeWire su Linux, CoreAudio su macOS), stessa logica della versione WASAPI."""
+    import soundcard as sc
+    import soxr
+    wav = None
+    try:
+        mic = sc.get_microphone(self.device_index, include_loopback=True)
+        rate = 48000
+        rs = soxr.ResampleStream(rate, SR, 1, dtype="float32")
+        if self.wav_path:
+            wav = wave.open(str(self.wav_path), "wb")
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(SR)
+        written = 0
+        with mic.recorder(samplerate=rate, channels=1, blocksize=rate // 20) as rec:
+            while not self.stop_ev.is_set():
+                x = rec.record(numframes=rate // 20)
+                x = (x.mean(axis=1) if x.ndim > 1 else x).astype(np.float32)
+                y = rs.resample_chunk(x)
+                now = time.monotonic() - self.t0
+                if self.fill_gaps:
+                    missing = int(now * SR) - (written + len(y))
+                    if missing > SR * 0.2:
+                        y = np.concatenate([np.zeros(missing, np.float32), y])
+                if len(y):
+                    written += len(y)
+                    if self.muted:
+                        y = np.zeros_like(y)
+                        if self.seg.speaking:
+                            self.seg.flush()
+                        self.seg.level = -90.0
+                    if wav:
+                        wav.writeframes((np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes())
+                    if not self.muted:
+                        self.seg.feed(y, now)
+    except Exception as e:  # noqa: BLE001
+        self.error = f"{type(e).__name__}: {e}"
+    finally:
+        if wav:
+            wav.close()
+        self.seg.flush()
+
+
+Capture._run_soundcard = _capture_soundcard
 
 
 # ---------------------------------------------------------------- trascrittore
@@ -441,10 +541,10 @@ class Session:
         me = self.segs["me"] = Segmenter(lambda k, a, t: transcriber.submit("me", k, a, t),
                                          silence_end=float(self.cfg.get("pause", 0.7)), gate=gate)
         if self.cfg.get("output_index") is not None:
-            self.caps.append(Capture("others", int(self.cfg["output_index"]), others, t0,
+            self.caps.append(Capture("others", _dev(self.cfg["output_index"]), others, t0,
                                      self.out_dir / "_altri.wav" if save_audio else None, fill_gaps=True))
         if self.cfg.get("mic_index") is not None:
-            self.caps.append(Capture("me", int(self.cfg["mic_index"]), me, t0,
+            self.caps.append(Capture("me", _dev(self.cfg["mic_index"]), me, t0,
                                      self.out_dir / "_io.wav" if save_audio else None, fill_gaps=True))
         for c in self.caps:
             c.start()

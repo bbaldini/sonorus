@@ -1,8 +1,15 @@
 faster-whisper
-pyaudiowpatch
 soxr
-pywebview
 pillow
-nvidia-cublas-cu12
-nvidia-cudnn-cu12==9.*
 websocket-client
+# cattura audio: WASAPI su Windows, PulseAudio/PipeWire (Linux) e CoreAudio (macOS) con soundcard
+pyaudiowpatch; sys_platform == "win32"
+soundcard; sys_platform != "win32"
+# finestra: WebView2 su Windows, WKWebView su macOS, Qt WebEngine su Linux
+pywebview; sys_platform != "linux"
+pywebview[qt]; sys_platform == "linux"
+# scorciatoia globale Ctrl+Alt+M fuori da Windows
+pynput; sys_platform != "win32"
+# librerie CUDA per la GPU NVIDIA (Windows e Linux)
+nvidia-cublas-cu12; sys_platform != "darwin"
+nvidia-cudnn-cu12==9.*; sys_platform != "darwin"

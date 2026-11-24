@@ -205,7 +205,7 @@ table.res td.n{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="drawer"><div class="box">
   <h2>Impostazioni</h2>
-  <div class="f"><label>Audio degli altri (cosa esce dal PC)</label><select id="outDev"></select></div>
+  <div class="f"><label>Audio degli altri (cosa esce dal PC)</label><select id="outDev"></select><span class="hint" id="outHint"></span></div>
   <div class="f"><label>Il tuo microfono</label><select id="micDev"></select></div>
   <div class="row">
     <div class="f" style="flex:1"><label>Il tuo nome</label><input id="meName"></div>
@@ -360,7 +360,13 @@ function fillDevices(){
   };
   sel($('outDev'), devs.outputs, cfg.output_name);
   sel($('micDev'), devs.mics, cfg.mic_name);
+  $('outHint').textContent = devs.platform === 'darwin'
+    ? (devs.outputs.length ? 'Su macOS l\'audio di sistema passa da un dispositivo virtuale: imposta un\'uscita multipla con BlackHole e le cuffie.'
+       : 'macOS non lascia registrare l\'audio del PC: installa BlackHole (gratuito) e crea un\'uscita multipla con le cuffie in Configurazione MIDI Audio.')
+    : devs.platform === 'linux' && !devs.outputs.length ? 'Non vedo i «Monitor» di PulseAudio/PipeWire: controlla che il server audio sia attivo.' : '';
 }
+// indice numerico su Windows, id testuale del dispositivo su Linux e macOS
+const devVal = v => v === '' ? null : /^\d+$/.test(v) ? +v : v;
 function devName(el, list){ const d = list.find(x => String(x.index) === el.value); return d ? d.name : null; }
 function readSettings(){
   return { output_name: devName($('outDev'), devs.outputs), mic_name: devName($('micDev'), devs.mics),
@@ -378,8 +384,7 @@ async function start(){
   const s = readSettings();
   const pj = projects.find(p => p.id === $('proj').value);
   const c = {...s, title: $('title').value.trim(), project_id: pj ? pj.id : '', project_name: pj ? pj.name : '',
-    output_index: $('outDev').value === '' ? null : +$('outDev').value,
-    mic_index: $('micDev').value === '' ? null : +$('micDev').value};
+    output_index: devVal($('outDev').value), mic_index: devVal($('micDev').value)};
   if (c.output_index === null && c.mic_index === null) return toast('Scegli almeno una sorgente nelle Impostazioni');
   $('go').disabled = true; $('go').textContent = 'Preparo…';
   const r = await api.start(c);

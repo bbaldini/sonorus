@@ -9,8 +9,10 @@ import traceback
 from pathlib import Path
 
 NEON = Path(os.environ.get("SONORUS_NEON") or Path(__file__).resolve().parent / "neon-minutes")
-if not (NEON / "meeting_transcriber").is_dir():
-    NEON = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Neon Minutes"
+for _alt in (Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Neon Minutes",  # Windows, installer
+             Path.home() / ".local" / "lib" / "neon-minutes"):                        # Linux, installer
+    if not (NEON / "meeting_transcriber").is_dir():
+        NEON = _alt
 sys.path.insert(0, str(NEON))
 os.chdir(NEON)
 # Va importato per primo: imposta HF_HOME sulla cartella modelli di Neon, e

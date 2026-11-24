@@ -2,7 +2,7 @@
 
 [English](README.md) · **Italiano**
 
-Trascrizione delle riunioni **tutta in locale** su Windows: diretta mentre parli e, a fine riunione, un verbale rifinito con le voci separate e i nomi.
+Trascrizione delle riunioni **tutta in locale** su Windows, macOS e Linux: diretta mentre parli e, a fine riunione, un verbale rifinito con le voci separate e i nomi.
 
 - **Diretta a due canali.** Cattura in loopback WASAPI ciò che esce dal PC ("Altri") e il microfono ("Io"), ognuno con il proprio segmentatore a energia e un filtro anti-eco. La trascrizione usa faster-whisper `large-v3-turbo` (int8_float16) sulla GPU.
 - **Verbale rifinito.** Usa il motore di [Neon Minutes](https://github.com/battles5/neon-minutes) (pyannote + Whisper), installato a parte e guidato da `neon_worker.py` in un processo separato. La GPU (anche solo 4 GB) è di uno solo: la diretta ha la precedenza e la rifinitura si mette in pausa e riprende dalle cache.
@@ -26,15 +26,17 @@ Su una riunione reale di 23 minuti con 6 persone, su una GPU da 4 GB:
 
 Dettagli e limiti in [`docs/valutazione.md`](docs/valutazione.md); si può rifare su altre riunioni con `tools/valuta.py`.
 
-## Installazione
+## Scarica e installa
 
-Serve Windows 10/11, Python 3.12 e una GPU NVIDIA (senza, si ripiega sulla CPU con il modello `small`). Per i verbali rifiniti serve Neon Minutes nella sottocartella `neon-minutes\`; vale anche l'installazione standard in `%LOCALAPPDATA%\Programs\Neon Minutes`, oppure la variabile `SONORUS_NEON`. Per il verbale scritto dall'AI e per i riassunti serve [Ollama](https://ollama.com).
+**[⬇ Ultima versione](https://github.com/bbaldini/sonorus/releases/latest)**: un pacchetto per sistema, provato da GitHub Actions a ogni versione. Lo estrai e lanci l'installer una volta: prepara i pacchetti Python, scarica il modello e aggiunge Sonorus alle tue app.
 
-```bat
-install.bat
-```
+| Sistema | Pacchetto | Installer | Note |
+|---|---|---|---|
+| **Windows** 10/11 | `Sonorus-windows.zip` | doppio clic su `install.bat` | Python 3.12; usa la GPU NVIDIA se c'è |
+| **macOS** | `Sonorus-macos.zip` | doppio clic su `Installa Sonorus.command` | Python 3.10+; gira sulla CPU. Per sentire gli altri serve [BlackHole](https://existential.audio/blackhole/) (gratuito) con un'uscita multipla BlackHole + cuffie |
+| **Linux** x86_64 | `Sonorus-linux.tar.gz` | `./install.sh` | Python 3.10+ con `venv`, PulseAudio o PipeWire; usa la GPU NVIDIA se c'è |
 
-Crea `.venv`, scarica il modello e mette l'icona sul Desktop.
+Il verbale con le voci separate richiede [Neon Minutes](https://github.com/battles5/neon-minutes) (Windows e Linux, non macOS); verbale AI e riassunti richiedono [Ollama](https://ollama.com). Senza Neon funziona tutto il resto.
 
 ## File
 
@@ -62,7 +64,7 @@ Sonorus è rilasciato con licenza MIT: puoi usarlo, modificarlo e ridistribuirlo
   author  = {Baldini, Benedetta},
   title   = {Sonorus: local-first meeting transcription with two-channel live capture and refined minutes},
   year    = {2026},
-  version = {1.1.0},
+  version = {1.2.0},
   url     = {https://github.com/bbaldini/sonorus},
   license = {MIT}
 }

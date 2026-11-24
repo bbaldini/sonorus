@@ -25,8 +25,26 @@ import teams
 HERE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 CFG_PATH = engine.APPDATA / "config.json"
 JOBS_PATH = engine.APPDATA / "archivio.json"
-NEON_PY = engine.NEON_APP / "runtime" / "python.exe"
-NO_WINDOW = 0x08000000
+NEON_PY = engine.neon_python()
+NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
+
+def open_path(p):
+    """Apre un file o una cartella con l'app predefinita del sistema."""
+    if sys.platform == "win32":
+        os.startfile(p)  # noqa: S606
+    else:
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(p)])
+
+
+def _neon_env():
+    """Su Linux il Python di Neon trova le librerie CUDA dei pacchetti nvidia solo con LD_LIBRARY_PATH."""
+    env = dict(os.environ)
+    if sys.platform.startswith("linux"):
+        libs = [str(d) for d in engine.NEON_APP.glob("runtime/lib/python3.*/site-packages/nvidia/*/lib")]
+        if libs:
+            env["LD_LIBRARY_PATH"] = os.pathsep.join(libs + [env.get("LD_LIBRARY_PATH", "")]).strip(os.pathsep)
+    return env
 MEDIA = ("mp4", "mkv", "mov", "avi", "webm", "m4a", "mp3", "wav", "ogg")
 DEFAULTS = {"language": "it", "me_name": "Io", "others_name": "Altri", "pause": 0.7,
             "save_audio": True, "echo_guard": True, "glossary": "", "out_dir": "",
@@ -184,7 +202,8 @@ class Api:
             self.proc = subprocess.Popen(
                 [str(NEON_PY), "-u", str(HERE / "neon_worker.py"), json.dumps(args)],
                 stdout=subprocess.PIPE, stderr=logf, cwd=str(engine.NEON_APP),
-                creationflags=NO_WINDOW, encoding="utf-8", errors="replace")
+                creationflags=NO_WINDOW, encoding="utf-8", errors="replace", env=_neon_env(),
+                start_new_session=sys.platform != "win32")
         except Exception as e:  # noqa: BLE001
             job.update(status="error", error=str(e))
             self._save_jobs()
@@ -475,8 +494,15 @@ class Api:
         if self.proc is None:
             return
         self.pausing = True
-        subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"], capture_output=True,
-                       creationflags=NO_WINDOW)
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"], capture_output=True,
+                           creationflags=NO_WINDOW)
+        else:  # il worker è capo di un suo gruppo di processi: si chiude tutto il gruppo
+            import signal
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                self.proc.kill()
         for _ in range(100):
             if self.proc is None:
                 break
@@ -579,6 +605,13 @@ class Api:
     def _hotkey_loop(self):
         """Ctrl+Alt+M da qualsiasi finestra (anche da Teams) mette in pausa il microfono."""
         if sys.platform != "win32":
+            try:  # Linux (X11) e macOS (serve il permesso di Accessibilità): pynput
+                from pynput import keyboard
+                hk = keyboard.GlobalHotKeys({"<ctrl>+<alt>+m": lambda: self.session and self.toggle_mic()})
+                hk.start()
+                self.hotkey = True
+            except Exception:  # noqa: BLE001
+                self.hotkey = False
             return
         import ctypes
         from ctypes import wintypes
@@ -631,7 +664,7 @@ class Api:
     def open_folder(self, path=None):
         p = path or self.last_dir or self.cfg.get("out_dir") or str(Path.home() / "Documents" / "Sonorus")
         Path(p).mkdir(parents=True, exist_ok=True)
-        os.startfile(p)  # noqa: S606
+        open_path(p)
 
     def pick_folder(self):
         r = self.window.create_file_dialog(webview.FileDialog.FOLDER)
@@ -778,7 +811,7 @@ class Api:
             else:
                 f = Path(j["md"]) if which == "md" and j.get("md") else Path(j.get("session") or "") / "diretta.md"
             if f.exists():
-                os.startfile(str(f))  # noqa: S606
+                open_path(str(f))
 
 
 def main():

@@ -2,13 +2,13 @@
 
 **English** · [Italiano](README.it.md)
 
-Sonorus transcribes your meetings **entirely on your own Windows PC**. You get a live transcript while you talk. When the meeting ends, it produces refined minutes with separate speakers and their names. Nothing leaves the machine: no cloud and no bot joining the call. It works with Teams, Zoom, Meet or anything else that plays through your speakers.
+Sonorus transcribes your meetings **entirely on your own computer**: Windows, macOS or Linux. You get a live transcript while you talk. When the meeting ends, it produces refined minutes with separate speakers and their names. Nothing leaves the machine: no cloud and no bot joining the call. It works with Teams, Zoom, Meet or anything else that plays through your speakers.
 
 > The app's interface is in Italian (it was built for an Italian team); code comments and docs are mostly Italian as well. Transcription works in any language Whisper supports.
 
 ## What it does
 
-- **Two-channel live transcription.** Sonorus captures what your PC plays ("others") through WASAPI loopback, and your microphone ("you"). Each channel has its own energy-based segmenter, and an echo guard stops the other people's voices from being attributed to you. Speech is transcribed on the GPU with faster-whisper `large-v3-turbo` (int8_float16).
+- **Two-channel live transcription.** Sonorus captures what your computer plays ("others") and your microphone ("you"): WASAPI loopback on Windows, PulseAudio/PipeWire monitors on Linux, a virtual device such as BlackHole on macOS. Each channel has its own energy-based segmenter, and an echo guard stops the other people's voices from being attributed to you. Speech is transcribed with faster-whisper: `large-v3-turbo` (int8_float16) on an NVIDIA GPU, `small` on the CPU otherwise.
 - **Refined minutes with speakers.** After the meeting, the [Neon Minutes](https://github.com/battles5/neon-minutes) engine (pyannote + Whisper over the whole recording) separates the voices and recognises people it has heard before. It runs in its own process. The GPU (4 GB is enough) is shared: a live session always wins, and a refinement in progress pauses and later resumes from its cache.
 - **It recognises your voice without enrolment.** The microphone channel shows when *you* were speaking. The pyannote speaker that overlaps those moments takes your name and is added to the voice library.
 - **Live + refined, merged.** The two transcripts fail in different ways: the live one cuts sentences every 20 s but rarely misses anything, while the refined one is clean but sometimes drops whole stretches and invents courtesy phrases over silence. `merge.py` uses each to repair the other:
@@ -35,19 +35,22 @@ On a real 23-minute project meeting with 6 people, on a laptop GPU with 4 GB (no
 
 Details and limitations are in [`docs/valutazione.md`](docs/valutazione.md) (Italian). To reproduce on your own meetings, run `tools/valuta.py`.
 
-## Install
+## Download and install
 
-You need:
-- Windows 10/11 and Python 3.12;
-- an NVIDIA GPU (without one, Sonorus falls back to the CPU with Whisper `small`);
-- for refined minutes, Neon Minutes. Sonorus finds it in the `neon-minutes\` subfolder, in its default install location `%LOCALAPPDATA%\Programs\Neon Minutes`, or wherever `SONORUS_NEON` points;
-- for AI minutes and summaries, [Ollama](https://ollama.com) with a model such as `qwen3.5:9b` (minutes) and `qwen2.5:3b` (live summary).
+**[⬇ Latest release](https://github.com/bbaldini/sonorus/releases/latest)**: one package per system, each tested by GitHub Actions on every release. Unpack it and run the installer once; it sets up the Python packages, downloads the speech model and adds Sonorus to your apps.
 
-```bat
-install.bat
-```
+| System | Package | Installer | Notes |
+|---|---|---|---|
+| **Windows** 10/11 | `Sonorus-windows.zip` | double-click `install.bat` | Python 3.12. Uses an NVIDIA GPU if present |
+| **macOS** (Apple Silicon or Intel) | `Sonorus-macos.zip` | double-click `Installa Sonorus.command` | Python 3.10+. Runs on the CPU. macOS can't record system audio by itself: install the free [BlackHole](https://existential.audio/blackhole/) driver and create a *Multi-Output Device* (BlackHole + your headphones) in Audio MIDI Setup, then pick BlackHole as "others" |
+| **Linux** x86_64 | `Sonorus-linux.tar.gz` | `./install.sh` | Python 3.10+ with `venv`, PulseAudio or PipeWire. Uses an NVIDIA GPU if present |
 
-This creates `.venv`, downloads the Whisper model and puts a shortcut on the Desktop.
+Optional:
+- **Speaker-separated minutes** need [Neon Minutes](https://github.com/battles5/neon-minutes) (Windows and Linux; not available on macOS). Sonorus finds it in the `neon-minutes/` subfolder, in Neon's default install location (`%LOCALAPPDATA%\Programs\Neon Minutes` on Windows, `~/.local/lib/neon-minutes` on Linux), or wherever `SONORUS_NEON` points.
+- **AI minutes and live summaries** need [Ollama](https://ollama.com) with a model such as `qwen3.5:9b` (minutes) and `qwen2.5:3b` (live summary).
+- **Ctrl+Alt+M** works everywhere. On macOS it needs the Accessibility permission; on Linux it works under X11, while on Wayland you use the button.
+
+Without Neon, everything else still works: live transcription, mic pause, AI minutes, Passaporta, evaluation.
 
 ## Files
 
@@ -63,8 +66,10 @@ This creates `.venv`, downloads the Whisper model and puts a shortcut on the Des
 | `tools/valuta.py` | Session statistics and totals over references |
 | `neon_worker.py` | Bridge to Neon Minutes, with fixes for 4 GB GPUs |
 | `static/index.html` | User interface |
+| `install.bat`, `install.sh`, `Installa Sonorus.command` | Installers for Windows, Linux/macOS, macOS (double-click) |
+| `tests/selftest.py` | Cross-platform self-test run by CI |
 
-All data stays on your PC. Meetings are saved in `Documents\Sonorus`; settings and the archive are in `%LOCALAPPDATA%\Sonorus`.
+All data stays on your computer. Meetings are saved in `Documents/Sonorus`; settings and the archive are in `%LOCALAPPDATA%\Sonorus` (Windows), `~/Library/Application Support/Sonorus` (macOS) or `~/.local/share/sonorus` (Linux).
 
 ## Citing
 
@@ -75,7 +80,7 @@ Sonorus is MIT-licensed: use it, change it and redistribute it freely. **If you 
   author  = {Baldini, Benedetta},
   title   = {Sonorus: local-first meeting transcription with two-channel live capture and refined minutes},
   year    = {2026},
-  version = {1.1.0},
+  version = {1.2.0},
   url     = {https://github.com/bbaldini/sonorus},
   license = {MIT}
 }

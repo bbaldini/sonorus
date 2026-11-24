@@ -1,0 +1,68 @@
+name: Test & release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libpulse0 pulseaudio
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - name: Self-test
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then pulseaudio --start --exit-idle-time=-1 || true; fi
+          python tests/selftest.py
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages per system
+        run: |
+          set -e
+          mkdir -p out stage
+          git archive --format=tar --prefix=Sonorus/ HEAD | tar -x -C stage
+          rm -rf stage/Sonorus/.github
+          (cd stage && zip -qr ../out/Sonorus-windows.zip Sonorus -x "Sonorus/install.sh" "Sonorus/Installa Sonorus.command")
+          (cd stage && zip -qr ../out/Sonorus-macos.zip Sonorus -x "Sonorus/install.bat")
+          tar -czf out/Sonorus-linux.tar.gz -C stage --exclude="Sonorus/install.bat" --exclude="Sonorus/Installa Sonorus.command" Sonorus
+          ls -la out
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" \
+            --title "Sonorus $GITHUB_REF_NAME" --notes-file - <<'NOTES'
+          Download the package for your system, unpack it and run the installer once. It sets up Python packages, downloads the speech model and adds Sonorus to your apps.
+
+          | System | File | Install |
+          |---|---|---|
+          | Windows 10/11 | `Sonorus-windows.zip` | double-click `install.bat` (needs Python 3.12) |
+          | macOS (Apple Silicon or Intel) | `Sonorus-macos.zip` | double-click `Installa Sonorus.command` (needs Python 3.10+); to hear the others install BlackHole |
+          | Linux x86_64 | `Sonorus-linux.tar.gz` | `./install.sh` (needs `python3-venv`, PulseAudio or PipeWire) |
+
+          An NVIDIA GPU is used automatically on Windows and Linux; otherwise transcription runs on the CPU.
+          Speaker-separated minutes need [Neon Minutes](https://github.com/battles5/neon-minutes) (Windows, Linux); AI minutes need [Ollama](https://ollama.com).
+          Tested on all three systems by GitHub Actions for every release.
+          NOTES
