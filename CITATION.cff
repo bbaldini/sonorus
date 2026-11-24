@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "Se usi Sonorus (o le sue idee: riconoscimento della propria voce dal canale microfono, unione diretta + verbale) in un lavoro, un prodotto o una pubblicazione, per favore citalo così."
-title: "Sonorus: trascrizione locale delle riunioni con diretta a due canali e verbale rifinito"
+message: "If you use Sonorus, or build on its ideas (recognising the user's voice from the microphone channel; merging live and refined transcripts), in a product, a project or a publication, please cite it as below."
+title: "Sonorus: local-first meeting transcription with two-channel live capture and refined minutes"
 type: software
 authors:
   - family-names: Baldini

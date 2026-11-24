@@ -1,64 +1,79 @@
-# Sonorus
+<p align="center"><img src="docs/banner.jpg" alt="Sonorus — local-first meeting transcription" width="100%"></p>
 
-Trascrizione delle riunioni **tutta in locale** su Windows: diretta mentre parli e, a fine riunione, un verbale rifinito con le voci separate e i nomi.
+**English** · [Italiano](README.it.md)
 
-- **Diretta a due canali.** Cattura in loopback WASAPI ciò che esce dal PC ("Altri") e il microfono ("Io"), ognuno con il proprio segmentatore a energia e un filtro anti-eco. La trascrizione usa faster-whisper `large-v3-turbo` (int8_float16) sulla GPU.
-- **Verbale rifinito.** Usa il motore di [Neon Minutes](https://github.com/battles5/neon-minutes) (pyannote + Whisper), installato a parte e guidato da `neon_worker.py` in un processo separato. La GPU (anche solo 4 GB) è di uno solo: la diretta ha la precedenza e la rifinitura si mette in pausa e riprende dalle cache.
-- **La tua voce si riconosce da sola.** La traccia del microfono dice quando parlavi tu: lo speaker di pyannote che coincide con quei momenti prende il tuo nome ed entra nella libreria voci.
-- **Diretta + verbale uniti** (`merge.py`). I tratti che la rifinitura salta vengono recuperati dalla diretta (in corsivo, «dalla diretta»). Le frasi di cortesia inventate sul silenzio ("Grazie a tutti.") vengono tolte, se la diretta non le conferma.
-- **Pausa del microfono.** Pulsante o **Ctrl+Alt+M** globale, da usare insieme al mute di Teams: mentre è attiva la tua voce non viene né trascritta né salvata, e nel file al suo posto c'è silenzio. Gli intervalli di pausa sono scritti nella diretta.
-- **Rifai la diretta.** Le due tracce restano salvate e si possono ritrascrivere più veloci del tempo reale, per esempio dopo aver aggiornato il glossario.
-- **Unione parola per parola.** Dentro i paragrafi, le parole dei due sistemi vengono allineate. Dove non sono d'accordo vince il termine del glossario, oppure la versione con probabilità nettamente più alta: la diretta salva tempo e probabilità di ogni parola. Le correzioni sono elencate in fondo al verbale.
-- **Verbale scritto dall'AI locale** (Ollama, per esempio `qwen3.5:9b`). A fine riunione scrive presenti, punti discussi, decisioni e azioni (chi, cosa, entro quando). Gira quando la GPU è libera e si interrompe se parte una diretta.
-- **Riassunto «Finora» durante la riunione.** Ogni 5 minuti, con un modello piccolo sulla CPU.
-- **Passaporta.** Si sceglie il progetto all'inizio della diretta: il suo glossario (nomi, partner, temi) va a Whisper e al verbale. Con «Manda a Passaporta» il verbale diventa una pagina in *Verbali* e le azioni diventano task nel Gantt. Rimandarlo aggiorna pagina e task, senza doppioni. Passaporta è l'app interna di wiki e Gantt; senza di lei tutto il resto funziona.
-- **Segue il muto di Teams** tramite l'API locale per app di terze parti del nuovo Teams. Va attivata in Teams: Impostazioni → Privacy → Gestisci API.
-- **Valutazione.** Si corregge a mano qualche minuto mentre lo si ascolta, e Sonorus calcola **WER e cpWER** di diretta, verbale rifinito, unione per tratti e unione parola per parola. Il totale su più riunioni si ottiene con `tools/valuta.py --riferimenti`.
-- Glossario generale e per progetto, archivio, rinomina degli speaker, export in `.md`, `.json` e `.srt`.
+Sonorus transcribes your meetings **entirely on your own Windows PC**. You get a live transcript while you talk. When the meeting ends, it produces refined minutes with separate speakers and their names. Nothing leaves the machine: no cloud and no bot joining the call. It works with Teams, Zoom, Meet or anything else that plays through your speakers.
 
-## Prima valutazione
+> The app's interface is in Italian (it was built for an Italian team); code comments and docs are mostly Italian as well. Transcription works in any language Whisper supports.
 
-Su una riunione reale di 23 minuti con 6 persone, su una GPU da 4 GB:
-- il verbale rifinito lasciava **senza testo il 5,4% del parlato**; l'unione con la diretta ha recuperato **+6,2% di parole**;
-- il canale del microfono ha coperto il **99%** della voce dell'utente.
+## What it does
 
-Dettagli e limiti in [`docs/valutazione.md`](docs/valutazione.md); si può rifare su altre riunioni con `tools/valuta.py`.
+- **Two-channel live transcription.** Sonorus captures what your PC plays ("others") through WASAPI loopback, and your microphone ("you"). Each channel has its own energy-based segmenter, and an echo guard stops the other people's voices from being attributed to you. Speech is transcribed on the GPU with faster-whisper `large-v3-turbo` (int8_float16).
+- **Refined minutes with speakers.** After the meeting, the [Neon Minutes](https://github.com/battles5/neon-minutes) engine (pyannote + Whisper over the whole recording) separates the voices and recognises people it has heard before. It runs in its own process. The GPU (4 GB is enough) is shared: a live session always wins, and a refinement in progress pauses and later resumes from its cache.
+- **It recognises your voice without enrolment.** The microphone channel shows when *you* were speaking. The pyannote speaker that overlaps those moments takes your name and is added to the voice library.
+- **Live + refined, merged.** The two transcripts fail in different ways: the live one cuts sentences every 20 s but rarely misses anything, while the refined one is clean but sometimes drops whole stretches and invents courtesy phrases over silence. `merge.py` uses each to repair the other:
+  - **stretch level:** passages the refined minutes skipped are restored from the live transcript, in italics and marked as such; invented phrases the live transcript does not confirm are removed;
+  - **word level:** inside each paragraph, the words of both systems are aligned. Where they disagree, the version containing a glossary term wins, or else the one with clearly higher confidence; the live transcript stores timing and probability for every word. Each correction is listed at the end of the minutes.
+- **AI-written minutes on a local LLM** (Ollama, e.g. `qwen3.5:9b`). From the merged transcript it writes attendees, topics, decisions and action items (who, what, by when). It runs once the GPU is free and stops at once if a live session starts.
+- **"So far" summary during the meeting.** Every 5 minutes, a small model running on the CPU updates a bullet summary, so it never competes with Whisper for GPU memory.
+- **Mute that really mutes.** A button or a global **Ctrl+Alt+M** pauses your microphone: nothing is transcribed and the recording holds silence instead. Sonorus can also **follow Teams' own mute** via the new Teams' local third-party app API; enable it in Teams under Settings → Privacy → Manage API.
+- **Projects and glossaries** (optional, via Passaporta, our internal wiki/Gantt app). You pick the project when the meeting starts, and its people, partners and topics become the glossary for Whisper and for the minutes. *Send to Passaporta* turns the minutes into a page and the action items into Gantt tasks. Sending again updates the same page and tasks instead of duplicating them. Everything else works without Passaporta.
+- **Re-transcribe.** Both audio tracks are kept, so a meeting can be re-transcribed faster than real time, for example after you improve the glossary.
+- **Built-in evaluation.** You listen to a few minutes and correct the text, and Sonorus computes **WER and cpWER** for each version: live, refined, stretch-merged and word-merged. Totals across meetings come from `tools/valuta.py --riferimenti`.
 
-## Installazione
+## First numbers
 
-Serve Windows 10/11, Python 3.12 e una GPU NVIDIA (senza, si ripiega sulla CPU con il modello `small`). Per i verbali rifiniti serve Neon Minutes nella sottocartella `neon-minutes\`; vale anche l'installazione standard in `%LOCALAPPDATA%\Programs\Neon Minutes`, oppure la variabile `SONORUS_NEON`. Per il verbale scritto dall'AI e per i riassunti serve [Ollama](https://ollama.com).
+On a real 23-minute project meeting with 6 people, on a laptop GPU with 4 GB (no hand-made reference yet, so these are coverage figures, not error rates):
+
+| | |
+|---|---|
+| Speech with **no text at all** in the refined minutes | **5.4 %** |
+| Words recovered by merging with the live transcript | **+6.2 %** |
+| User's voice covered by the microphone channel (vs. pyannote) | **99.2 %** |
+| Refinement speed (diarization + ASR) | 0.15 × real time |
+| AI minutes (`qwen3.5:9b`, partly on CPU) | 5–7 min |
+
+Details and limitations are in [`docs/valutazione.md`](docs/valutazione.md) (Italian). To reproduce on your own meetings, run `tools/valuta.py`.
+
+## Install
+
+You need:
+- Windows 10/11 and Python 3.12;
+- an NVIDIA GPU (without one, Sonorus falls back to the CPU with Whisper `small`);
+- for refined minutes, Neon Minutes. Sonorus finds it in the `neon-minutes\` subfolder, in its default install location `%LOCALAPPDATA%\Programs\Neon Minutes`, or wherever `SONORUS_NEON` points;
+- for AI minutes and summaries, [Ollama](https://ollama.com) with a model such as `qwen3.5:9b` (minutes) and `qwen2.5:3b` (live summary).
 
 ```bat
 install.bat
 ```
 
-Crea `.venv`, scarica il modello e mette l'icona sul Desktop.
+This creates `.venv`, downloads the Whisper model and puts a shortcut on the Desktop.
 
-## File
+## Files
 
-| File | Cosa fa |
+| File | Purpose |
 |---|---|
-| `app.py` | Finestra pywebview, coda delle rifiniture, GPU condivisa, pausa microfono, hotkey |
-| `engine.py` | Cattura, segmentatore, trascrittore, sessione, ritrascrizione dalle tracce |
-| `merge.py` | Unisce diretta e verbale rifinito, per tratti e parola per parola (solo libreria standard) |
-| `llm.py` | Verbale e riassunti con Ollama |
-| `passaporta.py` | Progetti, glossario per progetto, invio del verbale e dei task |
-| `teams.py` | Segue il muto di Teams (WebSocket locale su 127.0.0.1:8124) |
-| `evalkit.py` | WER e cpWER sui tratti corretti a mano |
-| `tools/valuta.py` | Statistiche di una sessione e totale dei riferimenti |
-| `neon_worker.py` | Ponte verso Neon Minutes, con i fix per GPU da 4 GB |
-| `static/index.html` | Interfaccia |
+| `app.py` | pywebview window, refinement queue, shared GPU, mic pause, global hotkey |
+| `engine.py` | Audio capture, segmenter, transcriber, session, re-transcription from saved tracks |
+| `merge.py` | Merges live and refined transcripts, by stretch and word by word (standard library only) |
+| `llm.py` | Minutes and live summaries via Ollama |
+| `passaporta.py` | Projects, per-project glossary, sending minutes and tasks |
+| `teams.py` | Follows Teams' mute state (local WebSocket on 127.0.0.1:8124) |
+| `evalkit.py` | WER and cpWER on hand-corrected excerpts |
+| `tools/valuta.py` | Session statistics and totals over references |
+| `neon_worker.py` | Bridge to Neon Minutes, with fixes for 4 GB GPUs |
+| `static/index.html` | User interface |
 
-I dati restano sul PC: le riunioni in `Documents\Sonorus`, la configurazione e l'archivio in `%LOCALAPPDATA%\Sonorus`.
+All data stays on your PC. Meetings are saved in `Documents\Sonorus`; settings and the archive are in `%LOCALAPPDATA%\Sonorus`.
 
-## Come citare
+## Citing
 
-Sonorus è rilasciato con licenza MIT: puoi usarlo, modificarlo e ridistribuirlo liberamente. **Se lo usi**, o ne riprendi le idee (riconoscere la propria voce dal canale del microfono, unire diretta e verbale rifinito) in un lavoro, un prodotto o una pubblicazione, **ti chiedo di citarlo**. Il pulsante *Cite this repository* di GitHub (dal file `CITATION.cff`) produce il riferimento, per esempio:
+Sonorus is MIT-licensed: use it, change it and redistribute it freely. **If you use it**, or build on its ideas (recognising the user's voice from the microphone channel; merging live and refined transcripts), in a product, a project or a publication, **please cite it**. GitHub's *Cite this repository* button generates the reference from `CITATION.cff`:
 
 ```bibtex
 @software{baldini_sonorus_2026,
   author  = {Baldini, Benedetta},
-  title   = {Sonorus: trascrizione locale delle riunioni con diretta a due canali e verbale rifinito},
+  title   = {Sonorus: local-first meeting transcription with two-channel live capture and refined minutes},
   year    = {2026},
   version = {1.1.0},
   url     = {https://github.com/bbaldini/sonorus},
@@ -66,6 +81,6 @@ Sonorus è rilasciato con licenza MIT: puoi usarlo, modificarlo e ridistribuirlo
 }
 ```
 
-## Ringraziamenti
+## Acknowledgements
 
-Il verbale rifinito usa [Neon Minutes](https://github.com/battles5/neon-minutes) (MIT-0), che si installa a parte. Le librerie principali sono [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [pyannote.audio](https://github.com/pyannote/pyannote-audio), [PyAudioWPatch](https://github.com/s0d3s/PyAudioWPatch) e [pywebview](https://github.com/r0x0r/pywebview).
+Refined minutes rely on [Neon Minutes](https://github.com/battles5/neon-minutes) (MIT-0), installed separately. Sonorus is built on [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [pyannote.audio](https://github.com/pyannote/pyannote-audio), [PyAudioWPatch](https://github.com/s0d3s/PyAudioWPatch), [pywebview](https://github.com/r0x0r/pywebview) and [Ollama](https://ollama.com).
