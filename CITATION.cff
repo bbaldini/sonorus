@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "Se usi Sonorus (o le sue idee: riconoscimento della propria voce dal canale microfono, unione diretta + verbale) in un lavoro, un prodotto o una pubblicazione, per favore citalo così."
+title: "Sonorus: trascrizione locale delle riunioni con diretta a due canali e verbale rifinito"
+type: software
+authors:
+  - family-names: Baldini
+    given-names: Benedetta
+version: 1.0.0
+date-released: 2026-11-24
+license: MIT
+repository-code: "https://github.com/bbaldini/sonorus"
+keywords: [speech recognition, speaker diarization, meeting transcription, whisper, pyannote, local-first]

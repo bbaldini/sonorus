@@ -10,6 +10,14 @@ Trascrizione delle riunioni **tutta in locale** su Windows: diretta mentre parli
 - **Rifai la diretta.** Le due tracce restano salvate e si possono ritrascrivere più veloci del tempo reale, per esempio dopo aver aggiornato il glossario.
 - Glossario dei termini di progetto, archivio, rinomina degli speaker, export in `.md`, `.json` e `.srt`.
 
+## Prima valutazione
+
+Su una riunione reale di 23 minuti con 6 persone, su una GPU da 4 GB:
+- il verbale rifinito lasciava **senza testo il 5,4% del parlato**; l'unione con la diretta ha recuperato **+6,2% di parole**;
+- il canale del microfono ha coperto il **99%** della voce dell'utente.
+
+Dettagli e limiti in [`docs/valutazione.md`](docs/valutazione.md); si può rifare su altre riunioni con `tools/valuta.py`.
+
 ## Installazione
 
 Serve Windows 10/11, Python 3.12, una GPU NVIDIA (si ripiega sulla CPU con il modello `small`) e, per i verbali rifiniti, Neon Minutes installato in `%LOCALAPPDATA%\Programs\Neon Minutes`.
@@ -31,3 +39,22 @@ Crea `.venv`, scarica il modello e mette l'icona sul Desktop.
 | `static/index.html` | Interfaccia |
 
 I dati restano sul PC: le riunioni in `Documents\Sonorus`, la configurazione e l'archivio in `%LOCALAPPDATA%\Sonorus`.
+
+## Come citare
+
+Sonorus è rilasciato con licenza MIT: puoi usarlo, modificarlo e ridistribuirlo liberamente. **Se lo usi**, o ne riprendi le idee (riconoscere la propria voce dal canale del microfono, unire diretta e verbale rifinito) in un lavoro, un prodotto o una pubblicazione, **ti chiedo di citarlo**. Il pulsante *Cite this repository* di GitHub (dal file `CITATION.cff`) produce il riferimento, per esempio:
+
+```bibtex
+@software{baldini_sonorus_2026,
+  author  = {Baldini, Benedetta},
+  title   = {Sonorus: trascrizione locale delle riunioni con diretta a due canali e verbale rifinito},
+  year    = {2026},
+  version = {1.0.0},
+  url     = {https://github.com/bbaldini/sonorus},
+  license = {MIT}
+}
+```
+
+## Ringraziamenti
+
+Il verbale rifinito usa [Neon Minutes](https://github.com/battles5/neon-minutes) (MIT-0), che si installa a parte. Le librerie principali sono [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [pyannote.audio](https://github.com/pyannote/pyannote-audio), [PyAudioWPatch](https://github.com/s0d3s/PyAudioWPatch) e [pywebview](https://github.com/r0x0r/pywebview).

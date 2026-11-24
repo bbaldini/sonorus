@@ -49,7 +49,7 @@ HALLUCINATIONS = [
     r"grazie (a tutti )?per (la visione|l'attenzione|aver guardato)",
     r"iscriviti al canale", r"thanks? (you )?for watching", r"^\W*(grazie|thank you)\W*$",
     r"^\W*\.+\W*$", r"^\W*musica\W*$", r"^\W*\[.*\]\W*$",
-    # frase intera inventata sul rumore del microfono chiuso (call ADAPT AI, 24/11)
+    # frase intera inventata sul rumore del microfono chiuso
     r"^\W*grazie (a tutti|mille|a voi)\W*$",
 ]
 _HALL_RE = re.compile("|".join(HALLUCINATIONS), re.I)
