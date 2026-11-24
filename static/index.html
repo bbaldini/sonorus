@@ -109,6 +109,26 @@ button.primary{background:var(--gold);color:#1c1606;border:none;font-weight:600}
 .sysline{text-align:center;color:var(--muted);font-size:12.5px;margin:4px 0 14px}
 .sysline b{color:var(--me);font-weight:600}
 .fromlive .txt{font-style:italic;color:var(--muted)}
+#proj{max-width:230px}
+.livewrap{flex:1;display:flex;min-height:0}
+.livewrap .scroll{flex:1}
+#sumbox{width:300px;border-left:1px solid var(--line);background:var(--panel);padding:14px 16px;overflow-y:auto;display:none}
+#sumbox.show{display:block}
+#sumbox h3{margin:0 0 4px;font-family:Georgia,serif;font-weight:normal;color:var(--gold);font-size:16px}
+#sumbox .when{font-size:12px;color:var(--muted);margin-bottom:10px}
+#sumtext{white-space:pre-wrap;font-size:14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:6;align-items:center;justify-content:center}
+.modal.open{display:flex}
+.modal .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(900px,94vw);max-height:92vh;overflow-y:auto;padding:18px 20px}
+.modal h2{font-family:Georgia,serif;color:var(--gold);font-weight:normal;margin:0 0 12px}
+.modal textarea{width:100%;font-size:13.5px;line-height:1.45}
+table.res{border-collapse:collapse;width:100%;margin:10px 0;font-size:14px}
+table.res th,table.res td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left}
+table.res td.n{text-align:right;font-variant-numeric:tabular-nums}
+.act{display:grid;grid-template-columns:22px 170px 1fr 140px;gap:6px;align-items:center;margin:0 0 6px}
+.act input[type=text],.act input[type=date]{padding:4px 7px;font-size:13.5px}
+.md{white-space:pre-wrap;font-size:14px}
+.teamsst{font-size:12.5px;color:var(--muted)}
 @media (max-width:760px){ .arch{grid-template-columns:1fr} .list{max-height:38vh;border-right:none;border-bottom:1px solid var(--line)} .meters{display:none} }
 </style>
 </head>
@@ -131,6 +151,7 @@ button.primary{background:var(--gold);color:#1c1606;border:none;font-weight:600}
 <section class="view on" id="v-live">
   <div class="controls">
     <input id="title" placeholder="Titolo della riunione (facoltativo)">
+    <select id="proj" title="Progetto (da Passaporta): porta il suo glossario e dove mandare il verbale"><option value="">— nessun progetto —</option></select>
     <select id="lang" title="Lingua della riunione">
       <option value="it">Italiano</option><option value="en">English</option><option value="es">Español</option>
       <option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option>
@@ -140,15 +161,19 @@ button.primary{background:var(--gold);color:#1c1606;border:none;font-weight:600}
     <button id="mic" title="Ctrl+Alt+M da qualsiasi finestra, anche da Teams">🎙️ Microfono attivo</button>
     <button id="go" class="primary" disabled><span class="dot"></span>Inizia ad ascoltare</button>
   </div>
+  <div class="livewrap">
   <main class="scroll" id="out">
     <div class="empty" id="empty">
       Premi <b>Inizia ad ascoltare</b> e avvia la riunione come al solito.<br>
       Sonorus sente <b style="color:var(--oth)">l'audio del PC</b> (gli altri) e <b style="color:var(--me)">il tuo microfono</b> (tu).<br>
       A fine riunione prepara da solo il <b>verbale con le voci separate</b>: lo trovi in Archivio.<br>
       Tutto resta sul tuo computer. Con le cuffie la separazione è migliore.<br>
-      Quando ti metti in muto su Teams premi anche <b>Ctrl+Alt+M</b>: Sonorus smette di sentirti finché non lo ripremi.
+      Quando ti metti in muto su Teams premi anche <b>Ctrl+Alt+M</b> (o attiva «Segui il muto di Teams»): Sonorus smette di sentirti.
     </div>
   </main>
+  <aside id="sumbox"><h3>Finora</h3><div class="when" id="sumwhen">Il riassunto arriva dopo qualche minuto di riunione.</div>
+    <div id="sumtext"></div><p><button id="sumnow">Aggiorna ora</button></p></aside>
+  </div>
   <div class="bar-foot">
     <button id="copy">Copia testo</button>
     <button id="folder">Apri cartella</button>
@@ -190,19 +215,51 @@ button.primary{background:var(--gold);color:#1c1606;border:none;font-weight:600}
     <input id="pause" type="range" min="0.4" max="1.5" step="0.1"></div>
   <div class="f"><label>Glossario: nomi, sigle, termini tecnici (uno per riga)</label>
     <textarea id="glossary" rows="5" placeholder="IFAB&#10;AIND&#10;data lake"></textarea></div>
+  <div class="f"><label>Glossario del progetto scelto (uno per riga, si aggiunge a quello sopra)</label>
+    <textarea id="projGloss" rows="3" placeholder="Scegli un progetto nella Diretta"></textarea>
+    <span class="hint" id="projAuto"></span></div>
   <label class="chk"><input type="checkbox" id="autoRefine"><span>Verbale rifinito a fine riunione<small>Separa le voci e riconosce le persone già note. Serve l'audio salvato. Se inizi un'altra diretta si mette in pausa e poi riprende.</small></span></label>
   <label class="chk"><input type="checkbox" id="saveAudio"><span>Salva l'audio della riunione<small>registrazione.wav, circa 115 MB all'ora.</small></span></label>
   <label class="chk"><input type="checkbox" id="echo"><span>Filtro eco<small>Se usi gli altoparlanti invece delle cuffie, evita di attribuire a te le voci degli altri.</small></span></label>
+  <h2 style="font-size:17px;margin-top:20px">AI locale (Ollama)</h2>
+  <label class="chk"><input type="checkbox" id="autoMinutes"><span>Verbale scritto dall'AI a fine riunione<small>Presenti, punti discussi, decisioni e azioni, da rileggere e mandare a Passaporta.</small></span></label>
+  <div class="f"><label>Modello per il verbale</label><select id="minutesModel"></select></div>
+  <label class="chk"><input type="checkbox" id="liveSummary"><span>Riassunto «Finora» durante la riunione<small>Ogni 5 minuti, sulla CPU, per non rallentare la trascrizione.</small></span></label>
+  <div class="f"><label>Modello per il riassunto in diretta</label><select id="liveModel"></select></div>
+  <h2 style="font-size:17px;margin-top:20px">Teams</h2>
+  <label class="chk"><input type="checkbox" id="followTeams"><span>Segui il muto di Teams<small>Quando ti metti in muto su Teams, Sonorus mette in pausa il microfono. Una volta sola: in Teams, Impostazioni → Privacy → Gestisci API → Abilita API; poi, in riunione, consenti a «Sonorus».</small></span></label>
+  <p class="teamsst" id="teamsSt"></p>
   <label class="chk"><input type="checkbox" id="onTop"><span>Finestra sempre in primo piano</span></label>
   <div class="f"><label>Cartella delle riunioni in diretta</label>
     <div class="row"><input id="outDir" style="flex:1"><button id="pick">Scegli…</button></div></div>
   <p class="hint">Se nel tuo nome lasci "Io", Sonorus non prova a riconoscere la tua voce nei verbali.</p>
   <div class="row" style="justify-content:flex-end;margin-top:8px"><button id="close">Chiudi</button></div>
 </div></div>
+<div class="modal" id="sendM"><div class="card">
+  <h2>Manda a Passaporta</h2>
+  <div class="row"><div class="f" style="flex:1"><label>Progetto</label><select id="sProj"></select></div>
+    <div class="f" style="flex:2"><label>Titolo della pagina (sotto «Verbali»)</label><input id="sTitle"></div></div>
+  <div class="f"><label>Verbale</label><textarea id="sBody" rows="12"></textarea></div>
+  <div class="f"><label>Azioni → task nel Gantt (togli la spunta per non crearle)</label><div id="sActs"></div>
+    <button id="sAdd" style="align-self:flex-start">+ Azione</button></div>
+  <p class="hint" id="sNote"></p>
+  <div class="row" style="justify-content:flex-end"><button id="sCancel">Annulla</button><button class="primary" id="sGo">Manda</button></div>
+</div></div>
+<div class="modal" id="evalM"><div class="card">
+  <h2>Valuta la trascrizione</h2>
+  <p class="hint">Scegli qualche minuto, ascoltalo e correggi il testo (una battuta per riga: «Nome: testo»). Sonorus calcola quanto sbagliano la diretta, il verbale rifinito e le due unioni. Più minuti corretti, più i numeri sono affidabili.</p>
+  <div class="row" style="align-items:flex-end"><div class="f"><label>Da (mm:ss)</label><input id="eFrom" value="05:00" style="width:90px"></div>
+    <div class="f"><label>Minuti</label><input id="eLen" type="number" min="1" max="15" value="3" style="width:70px"></div>
+    <div class="f"><button id="eLoad">Carica</button></div><div class="f" style="flex:1"><audio id="eAudio" controls style="width:100%"></audio></div></div>
+  <textarea id="eText" rows="14" placeholder="Premi Carica"></textarea>
+  <div id="eRes"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:8px"><button id="eClose">Chiudi</button><button class="primary" id="eRun">Salva e calcola</button></div>
+</div></div>
 <div class="toast" id="toast"></div>
 
 <script>
 const $ = id => document.getElementById(id);
+let projects = [], aiModels = [];
 let api, cfg, devs, since = 0, running = false, t0 = 0, lastDir = null, jobsSig = '', jobs = [], selJob = null, viewMode = null, neon = true;
 const partials = {};
 const out = $('out');
@@ -248,6 +305,10 @@ function insertSorted(el){
 function handle(ev){
   $('empty')?.remove();
   const stick = nearBottom(out);
+  if (ev.kind === 'summary'){
+    $('sumbox').classList.add('show'); $('sumtext').textContent = ev.text;
+    $('sumwhen').textContent = `Fino a ${ev.upto} · aggiornato alle ${ev.at}`; return;
+  }
   if (ev.kind === 'mute'){
     const d = document.createElement('div'); d.className = 'sysline';
     d.innerHTML = ev.paused ? `${ev.ts} · <b>microfono in pausa</b>: la tua voce non viene registrata` : `${ev.ts} · microfono di nuovo attivo`;
@@ -282,6 +343,7 @@ async function tick(){
     $('mic').classList.toggle('off', mp);
     $('mic').textContent = mp ? '🔇 Microfono in pausa' : '🎙️ Microfono attivo';
     document.querySelector('.meter.me').classList.toggle('paused', mp);
+    if (r.teams !== undefined) $('teamsSt').textContent = r.teams || '';
     const n = (r.job ? 1 : 0) + r.queued;
     $('qbadge').hidden = !n; $('qbadge').textContent = n;
     $('jobchip').innerHTML = r.job ? `Rifinisco <b>${esc(r.job.title)}</b> · ${Math.round((r.job.progress||0)*100)}% · ${eta(r.job)}` : '';
@@ -305,13 +367,17 @@ function readSettings(){
     me_name: $('meName').value.trim() || 'Io', others_name: $('othName').value.trim() || 'Altri',
     pause: parseFloat($('pause').value), glossary: $('glossary').value, echo_guard: $('echo').checked,
     save_audio: $('saveAudio').checked, auto_refine: $('autoRefine').checked, on_top: $('onTop').checked,
-    out_dir: $('outDir').value.trim(), language: $('lang').value };
+    out_dir: $('outDir').value.trim(), language: $('lang').value,
+    auto_minutes: $('autoMinutes').checked, minutes_model: $('minutesModel').value || cfg.minutes_model,
+    live_summary: $('liveSummary').checked, live_model: $('liveModel').value || cfg.live_model,
+    follow_teams: $('followTeams').checked, project_id: $('proj').value };
 }
 function applyLabels(){ $('lblMe').textContent = $('meName').value || 'Io'; $('lblOth').textContent = $('othName').value || 'Altri'; }
 
 async function start(){
   const s = readSettings();
-  const c = {...s, title: $('title').value.trim(),
+  const pj = projects.find(p => p.id === $('proj').value);
+  const c = {...s, title: $('title').value.trim(), project_id: pj ? pj.id : '', project_name: pj ? pj.name : '',
     output_index: $('outDev').value === '' ? null : +$('outDev').value,
     mic_index: $('micDev').value === '' ? null : +$('micDev').value};
   if (c.output_index === null && c.mic_index === null) return toast('Scegli almeno una sorgente nelle Impostazioni');
@@ -321,6 +387,8 @@ async function start(){
   if (!r.ok){ $('go').innerHTML = '<span class="dot"></span>Inizia ad ascoltare'; return toast(r.error); }
   out.innerHTML = ''; since = 0; Object.keys(partials).forEach(k => delete partials[k]);
   running = true; t0 = Date.now(); lastDir = r.dir;
+  $('sumtext').textContent = ''; $('sumwhen').textContent = 'Il riassunto arriva dopo qualche minuto di riunione.';
+  $('sumbox').classList.toggle('show', $('liveSummary').checked); $('proj').disabled = true;
   $('go').classList.add('rec'); $('go').innerHTML = '<span class="dot"></span>Ferma e salva';
   $('title').disabled = true; $('lang').disabled = true;
 }
@@ -329,7 +397,7 @@ async function stop(){
   const r = await api.stop();
   running = false; lastDir = r.dir || lastDir;
   $('go').classList.remove('rec'); $('go').innerHTML = '<span class="dot"></span>Inizia ad ascoltare'; $('go').disabled = false;
-  $('title').disabled = false; $('lang').disabled = false; $('timer').textContent = '';
+  $('title').disabled = false; $('lang').disabled = false; $('timer').textContent = ''; $('proj').disabled = false;
   toast($('autoRefine').checked && $('saveAudio').checked && neon ? 'Salvata. Il verbale rifinito si prepara in Archivio.' : 'Trascrizione salvata');
   if (r.job) selJob = r.job;
 }
@@ -364,15 +432,25 @@ async function showDetail(id){
   if (!viewMode) viewMode = r.verbale ? 'verbale' : 'live';
   const canRefine = neon && j.status !== 'running' && j.status !== 'queued';
   let html = `<div class="dhead"><h2>${esc(j.title)}</h2>`;
-  if (r.live && r.verbale) html += `<div class="seg"><button data-m="verbale" class="${viewMode==='verbale'?'on':''}">Verbale</button><button data-m="live" class="${viewMode==='live'?'on':''}">Diretta</button></div>`;
+  const segs = [['verbale','Trascrizione', !!r.verbale], ['live','Diretta', !!r.live], ['ai','Verbale AI', !!r.minutes]].filter(x => x[2]);
+  if (segs.length > 1) html += `<div class="seg">${segs.map(([m,l]) => `<button data-m="${m}" class="${viewMode===m?'on':''}">${l}</button>`).join('')}</div>`;
+  if (j.project_name) html += `<span class="pill">${esc(j.project_name)}</span>`;
   if (j.status === 'running') html += `<span class="hint">Rifinitura ${Math.round((j.progress||0)*100)}% · ${eta(j)}</span><button data-a="cancel">Annulla</button>`;
   if (j.status === 'queued') html += `<span class="hint">${j.paused ? 'In pausa: riprende appena finisce la diretta' : 'In coda'}</span><button data-a="cancel">Annulla</button>`;
   if (j.status === 'error') html += `<span class="err">${esc(j.error)}</span>`;
   if (canRefine && !r.verbale) html += `<button class="primary" data-a="refine">Prepara il verbale con le voci</button>`;
   if (r.relive) html += `<span class="hint">Rifaccio la diretta…</span>`;
   else if (r.tracks && j.status !== 'running') html += `<button data-a="relive" title="Ritrascrive dalle tracce salvate con glossario e filtri attuali">Rifai la diretta</button>`;
-  html += `<div class="spacer"></div><button data-a="open">Apri file</button><button data-a="folder">Cartella</button><button data-a="remove" title="Toglie dall'elenco, i file restano">Togli</button></div>`;
-  if (viewMode === 'verbale' && r.speakers){
+  if (r.minutes_busy || j.minutes_state === 'running') html += `<span class="hint">L'AI scrive il verbale…</span>`;
+  else if (r.verbale) html += `<button data-a="minutes">${r.minutes ? 'Riscrivi verbale AI' : 'Scrivi verbale AI'}</button>`;
+  if (j.minutes_state && !['done','running'].includes(j.minutes_state)) html += `<span class="err">${esc(j.minutes_state)}</span>`;
+  if (r.verbale) html += `<button data-a="send">${j.passaporta ? 'Rimanda a Passaporta' : 'Manda a Passaporta'}</button>`;
+  if (r.verbale && r.live) html += `<button data-a="eval">Valuta</button>`;
+  html += `<div class="spacer"></div><button data-a="open">Apri file</button>`;
+  html += `<button data-a="folder">Cartella</button><button data-a="remove" title="Toglie dall'elenco, i file restano">Togli</button></div>`;
+  if (viewMode === 'ai' && r.minutes){
+    html += `<div class="scroll"><div class="md">${esc(r.minutes.md)}</div></div>`;
+  } else if (viewMode === 'verbale' && r.speakers){
     const cmap = {};
     html += `<div class="speakers">` + r.speakers.map(s => `<label class="spk"><span class="sw" style="background:${colorFor(cmap, s.name)}"></span>
       <input data-c="${esc(s.id)}" value="${esc(s.name)}"><small>${hms(s.speech_s)}${SOURCE[s.source]?' · '+SOURCE[s.source]:''}</small></label>`).join('') +
@@ -391,10 +469,13 @@ async function showDetail(id){
   det.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
     const a = b.dataset.a;
     if (a === 'refine'){ await api.refine(id); toast('Messo in coda'); }
+    if (a === 'minutes'){ const x = await api.write_minutes(id); toast(x.ok ? "L'AI scrive il verbale: ci vuole qualche minuto" : x.error); }
+    if (a === 'send') return openSend(r);
+    if (a === 'eval') return openEval(id);
     if (a === 'relive'){ const x = await api.retranscribe(id); toast(x.ok ? 'Rifaccio la diretta: lo stato è in alto' : x.error);
       if (x.ok){ const w = setInterval(async () => { if (!(await api.relive_state())){ clearInterval(w); showDetail(id); } }, 1500); } }
     if (a === 'cancel') await api.cancel(id);
-    if (a === 'open') api.open_file(id, viewMode === 'verbale' ? 'md' : 'live');
+    if (a === 'open') api.open_file(id, viewMode === 'verbale' ? 'md' : viewMode === 'ai' ? 'ai' : 'live');
     if (a === 'folder') api.open_job_folder(id);
     if (a === 'remove'){ await api.remove(id); selJob = null; det.innerHTML = ''; }
     if (a === 'rename'){
@@ -410,6 +491,98 @@ $('addFiles').onclick = async () => {
 };
 $('jobchip').onclick = () => showView('arch');
 
+/* ---------------- Passaporta */
+const projLabel = p => `${p.emoji ? p.emoji + ' ' : ''}${p.name}${p.status === 'programmato' ? ' (programmato)' : ''}`;
+async function loadProjects(){
+  const r = await api.passaporta_projects();
+  projects = r.projects || [];
+  const opts = '<option value="">— nessun progetto —</option>' + projects.map(p => `<option value="${p.id}">${esc(projLabel(p))}</option>`).join('');
+  $('proj').innerHTML = opts; $('proj').value = projects.some(p => p.id === cfg.project_id) ? cfg.project_id : '';
+  $('proj').title = r.ok ? 'Progetto (da Passaporta): porta il suo glossario e dove mandare il verbale' : r.error;
+  loadProjGloss();
+}
+async function loadProjGloss(){
+  const pid = $('proj').value;
+  $('projGloss').disabled = !pid;
+  if (!pid){ $('projGloss').value = ''; $('projAuto').textContent = ''; return; }
+  const g = await api.project_glossary(pid);
+  $('projGloss').value = g.custom || '';
+  $('projAuto').textContent = g.auto.length ? `Già presi da Passaporta: ${g.auto.join(', ')}` : '';
+}
+$('proj').onchange = () => { api.save_settings({project_id: $('proj').value}); loadProjGloss(); };
+$('projGloss').onchange = () => { if ($('proj').value) api.save_project_glossary($('proj').value, $('projGloss').value); };
+$('sumnow').onclick = async () => toast(await api.summary_now() ? 'Aggiorno il riassunto…' : 'Riassunto non attivo');
+
+let sendJob = null;
+function actRow(a = {chi:'', cosa:'', entro:''}){
+  const d = document.createElement('div'); d.className = 'act';
+  d.innerHTML = `<input type="checkbox" checked><input type="text" placeholder="Chi" value="${esc(a.chi)}">
+    <input type="text" placeholder="Cosa" value="${esc(a.cosa)}"><input type="date" value="${esc(/^\d{4}-\d\d-\d\d$/.test(a.entro||'') ? a.entro : '')}">`;
+  $('sActs').append(d);
+}
+async function openSend(r){
+  const j = r.job; sendJob = j.id;
+  if (!projects.length) await loadProjects();
+  if (!projects.length) return toast('Passaporta non raggiungibile: aprila e riprova');
+  $('sProj').innerHTML = projects.map(p => `<option value="${p.id}">${esc(projLabel(p))}</option>`).join('');
+  $('sProj').value = (j.passaporta && j.passaporta.pid) || j.project_id || $('proj').value || projects[0].id;
+  const day = new Date((j.added||Date.now()/1000)*1000).toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit', year:'numeric'});
+  $('sTitle').value = (j.passaporta && j.passaporta.title) || `Verbale · ${day} · ${j.title}`;
+  $('sBody').value = r.minutes ? r.minutes.md :
+    `**Data:** ${day}\n**Presenti:** \n\n## Punti discussi\n- \n\n## Decisioni\n- \n\n## Azioni\n- [ ] chi — cosa — entro quando\n`;
+  $('sActs').innerHTML = '';
+  ((r.minutes && r.minutes.data && r.minutes.data.azioni) || []).forEach(actRow);
+  $('sNote').textContent = j.passaporta ? 'Già mandato: la pagina e i task verranno aggiornati, non duplicati.' :
+    (r.minutes ? '' : "Non c'è ancora un verbale dell'AI: puoi scriverlo qui a mano o generarlo prima.");
+  $('sendM').classList.add('open');
+}
+$('sAdd').onclick = () => actRow();
+$('sCancel').onclick = () => $('sendM').classList.remove('open');
+$('sGo').onclick = async () => {
+  const acts = [...$('sActs').children].filter(d => d.children[0].checked && d.children[2].value.trim())
+    .map(d => ({chi: d.children[1].value.trim(), cosa: d.children[2].value.trim(), entro: d.children[3].value}));
+  $('sGo').disabled = true;
+  const x = await api.send_to_passaporta(sendJob, $('sProj').value, $('sTitle').value.trim(), $('sBody').value, acts);
+  $('sGo').disabled = false;
+  if (!x.ok) return toast(x.error);
+  const pj = projects.find(p => p.id === $('sProj').value);
+  await api.set_job_project(sendJob, $('sProj').value, pj ? pj.name : '');
+  $('sendM').classList.remove('open'); toast(`Mandato a Passaporta: pagina in Verbali e ${x.tasks} task nel Gantt`); refreshJobs(true);
+};
+
+let evalJob = null;
+const mmss = v => { const [m, s] = String(v).split(':').map(Number); return (m||0)*60 + (s||0); };
+const pctf = x => x == null ? '—' : (100*x).toFixed(1) + '%';
+function evalRange(){ const a = mmss($('eFrom').value); return [a, a + 60*Math.max(1, +$('eLen').value || 3)]; }
+function showEval(res, total){
+  const NOTE = {'diretta': 'tu / gli altri'};
+  let h = '';
+  if (res) h += `<table class="res"><tr><th>Versione</th><th>WER</th><th>cpWER</th><th>Parole (rif. / trascr.)</th></tr>` +
+    Object.entries(res).map(([k,v]) => `<tr><td>${k}${NOTE[k] ? ` <span class="hint">(${NOTE[k]})</span>` : ''}</td><td class="n">${pctf(v.wer)}</td><td class="n">${pctf(v.cpwer)}</td><td class="n">${v.parole_rif} / ${v.parole_ipotesi}</td></tr>`).join('') + `</table>`;
+  if (total && Object.keys(total).length) {
+    const any = Object.values(total)[0];
+    h += `<p class="hint">Su tutti i tratti corretti di questa riunione (${any.finestre} tratti, ${any.parole_rif} parole): ` +
+      Object.entries(total).map(([k,v]) => `${k} ${pctf(v.wer)}`).join(' · ') + `</p>`;
+  }
+  $('eRes').innerHTML = h;
+}
+async function openEval(id){ evalJob = id; $('eText').value = ''; $('eRes').innerHTML = ''; $('eAudio').removeAttribute('src'); $('evalM').classList.add('open'); }
+$('eLoad').onclick = async () => {
+  const [a, b] = evalRange(); $('eLoad').disabled = true;
+  const x = await api.eval_load(evalJob, a, b); $('eLoad').disabled = false;
+  if (!x.ok) return toast(x.error);
+  $('eText').value = x.text; if (x.audio) $('eAudio').src = x.audio;
+  if (x.saved) toast('Questo tratto era già stato corretto: ecco la tua versione');
+};
+$('eRun').onclick = async () => {
+  const [a, b] = evalRange();
+  if (!$('eText').value.trim()) return toast('Prima carica e correggi il testo');
+  const x = await api.eval_run(evalJob, a, b, $('eText').value);
+  if (!x.ok) return toast(x.error);
+  showEval(x.results, x.total); toast('Salvato');
+};
+$('eClose').onclick = () => $('evalM').classList.remove('open');
+
 /* ---------------- avvio */
 window.addEventListener('pywebviewready', async () => {
   api = window.pywebview.api;
@@ -424,6 +597,12 @@ window.addEventListener('pywebviewready', async () => {
   $('echo').checked = cfg.echo_guard; $('saveAudio').checked = cfg.save_audio; $('onTop').checked = cfg.on_top;
   $('autoRefine').checked = cfg.auto_refine;
   $('outDir').value = cfg.out_dir; $('outDir').placeholder = r.default_out;
+  $('autoMinutes').checked = cfg.auto_minutes; $('liveSummary').checked = cfg.live_summary; $('followTeams').checked = cfg.follow_teams;
+  aiModels = await api.ollama_models();
+  const mopts = (sel, cur) => { const l = aiModels.length ? aiModels : [cur]; $(sel).innerHTML = l.map(m => `<option>${esc(m)}</option>`).join(''); $(sel).value = cur; };
+  mopts('minutesModel', cfg.minutes_model); mopts('liveModel', cfg.live_model);
+  if (!aiModels.length){ $('autoMinutes').parentElement.title = 'Ollama non raggiungibile'; }
+  loadProjects();
   applyLabels();
   tick();
 });

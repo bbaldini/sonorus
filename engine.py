@@ -21,7 +21,13 @@ FRAME_S = FRAME / SR
 
 APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sonorus"
 NEON_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Neon Minutes"
-NEON_APP = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "Neon Minutes"
+# Neon Minutes sta nella cartella di Sonorus (neon-minutes\); la vecchia posizione
+# dell'installer resta come ripiego. SONORUS_NEON permette di indicarne un'altra.
+NEON_APP = next((p for p in (Path(os.environ.get("SONORUS_NEON", "")) if os.environ.get("SONORUS_NEON") else None,
+                             Path(__file__).resolve().parent / "neon-minutes",
+                             Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "Neon Minutes")
+                 if p and (p / "meeting_transcriber").is_dir()),
+                Path(__file__).resolve().parent / "neon-minutes")
 # un'unica cartella di modelli, condivisa con il motore di Neon Minutes
 MODEL_DIR = NEON_DATA / "modelli" / "hub" if NEON_APP.exists() else APPDATA / "modelli"
 
@@ -282,6 +288,7 @@ class Transcriber(threading.Thread):
         self.context = deque(maxlen=3)
         self.busy = 0.0
         self.inflight = False
+        self.last_words = []
 
     def unload(self):
         """Libera la GPU (serve al motore di Neon per le rifiniture)."""
@@ -333,8 +340,10 @@ class Transcriber(threading.Thread):
             initial_prompt=self._prompt(final), condition_on_previous_text=False,
             vad_filter=final, vad_parameters={"min_silence_duration_ms": 500},
             no_speech_threshold=0.6, temperature=0.0 if not final else (0.0, 0.2, 0.4),
+            word_timestamps=final,
         )
         out = []
+        self.last_words = []
         for s in segs:
             # prima serviva che valessero entrambe: troppo permissivo sul rumore
             if s.no_speech_prob > 0.6 or s.avg_logprob < -1.0 or s.compression_ratio > 2.4:
@@ -342,6 +351,10 @@ class Transcriber(threading.Thread):
             txt = s.text.strip()
             if txt and not _HALL_RE.search(txt):
                 out.append(txt)
+                # parole con tempo (relativo all'inizio della frase) e probabilità: servono
+                # all'unione parola per parola con il verbale rifinito (merge.fuse)
+                self.last_words += [{"s": round(w.start, 2), "e": round(w.end, 2), "w": w.word,
+                                     "p": round(w.probability, 3)} for w in (s.words or [])]
         return " ".join(out).strip()
 
     def run(self):
@@ -370,7 +383,8 @@ class Transcriber(threading.Thread):
             self.busy = time.monotonic() - t1
             if final and text:
                 self.context.append(text)
-            self.on_text(src, "final" if final else "partial", text, t, len(audio) / SR)
+            words = [{**w, "s": round(t + w["s"], 2), "e": round(t + w["e"], 2)} for w in self.last_words] if final else None
+            self.on_text(src, "final" if final else "partial", text, t, len(audio) / SR, words)
 
     def drain(self, timeout=60):
         """Aspetta che le frasi finali in coda siano trascritte."""
@@ -456,12 +470,12 @@ class Session:
     def errors(self):
         return [f"{c.key}: {c.error}" for c in self.caps if c.error]
 
-    def _on_text(self, src, kind, text, t, dur):
+    def _on_text(self, src, kind, text, t, dur, words=None):
         ev = {"src": src, "name": self.names[src], "kind": kind, "text": text,
               "t": round(t, 2), "ts": fmt_ts(t), "dur": round(dur, 2)}
         if kind == "final" and text:
             with self.lock:
-                self.lines.append(ev)
+                self.lines.append({**ev, "words": words or []})
                 with open(self.out_dir / "diretta.md", "a", encoding="utf-8") as f:
                     f.write(f"**[{ev['ts']}] {ev['name']}:** {text}\n\n")
         self.on_event(ev)
@@ -558,11 +572,11 @@ def retranscribe(out_dir, transcriber, names=None, pause=0.7, echo_guard=True, o
     lines, lock = [], threading.Lock()
     clock = {"t": 0.0}
 
-    def on_text(src, kind, text, t, dur):
+    def on_text(src, kind, text, t, dur, words=None):
         if kind == "final" and text:
             with lock:
                 lines.append({"src": src, "name": names.get(src, src), "kind": "final", "text": text,
-                              "t": round(t, 2), "ts": fmt_ts(t), "dur": round(dur, 2)})
+                              "t": round(t, 2), "ts": fmt_ts(t), "dur": round(dur, 2), "words": words or []})
 
     saved_cb, saved_ctx = transcriber.on_text, list(transcriber.context)
     transcriber.on_text = on_text
@@ -612,7 +626,7 @@ def transcribe_file(path, language="it"):
         x = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, ch).mean(axis=1) / 32768.0
     x = soxr.resample(x.astype(np.float32), rate, SR)
     res = []
-    tr = Transcriber(lambda s, k, txt, t, d: (res.append((k, t, txt)),
+    tr = Transcriber(lambda s, k, txt, t, d, w=None: (res.append((k, t, txt)),
                                               print(f"[{k:7s}] {fmt_ts(t)} {txt}", flush=True)),
                      language=language, on_status=print)
     tr.load()

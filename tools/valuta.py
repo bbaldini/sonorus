@@ -160,5 +160,27 @@ def main():
     print(f"| **Totale** | {sum(x[1] for x in dom)} | {sum(x[2] for x in dom)} |")
 
 
+def riferimenti(cartelle):
+    """WER e cpWER sui tratti corretti a mano (pulsante «Valuta» in Archivio), sommati
+    su una o più riunioni: python tools/valuta.py --riferimenti <sessione> [<sessione> ...]"""
+    import evalkit
+    res = []
+    for c in cartelle:
+        res += [r.get("risultati") for r in evalkit.references(Path(c) / "registrazione")]
+    tot = evalkit.aggregate(res)
+    if not tot:
+        print("Nessun tratto corretto a mano in queste riunioni.")
+        return
+    any_ = next(iter(tot.values()))
+    print(f"{any_['finestre']} tratti, {any_['parole_rif']} parole di riferimento\n")
+    print("| Versione | WER | cpWER |\n|---|---|---|")
+    for k, v in tot.items():
+        f = lambda x: f"{100 * x:.1f}%" if x is not None else "—"  # noqa: E731
+        print(f"| {k} | {f(v['wer'])} | {f(v['cpwer'])}{' (tu / altri)' if k == 'diretta' else ''} |")
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--riferimenti":
+        riferimenti(sys.argv[2:])
+    else:
+        main()

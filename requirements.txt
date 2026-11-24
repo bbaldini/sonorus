@@ -5,3 +5,4 @@ pywebview
 pillow
 nvidia-cublas-cu12
 nvidia-cudnn-cu12==9.*
+websocket-client

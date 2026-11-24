@@ -8,7 +8,13 @@ Trascrizione delle riunioni **tutta in locale** su Windows: diretta mentre parli
 - **Diretta + verbale uniti** (`merge.py`). I tratti che la rifinitura salta vengono recuperati dalla diretta (in corsivo, «dalla diretta»). Le frasi di cortesia inventate sul silenzio ("Grazie a tutti.") vengono tolte, se la diretta non le conferma.
 - **Pausa del microfono.** Pulsante o **Ctrl+Alt+M** globale, da usare insieme al mute di Teams: mentre è attiva la tua voce non viene né trascritta né salvata, e nel file al suo posto c'è silenzio. Gli intervalli di pausa sono scritti nella diretta.
 - **Rifai la diretta.** Le due tracce restano salvate e si possono ritrascrivere più veloci del tempo reale, per esempio dopo aver aggiornato il glossario.
-- Glossario dei termini di progetto, archivio, rinomina degli speaker, export in `.md`, `.json` e `.srt`.
+- **Unione parola per parola.** Dentro i paragrafi, le parole dei due sistemi vengono allineate. Dove non sono d'accordo vince il termine del glossario, oppure la versione con probabilità nettamente più alta: la diretta salva tempo e probabilità di ogni parola. Le correzioni sono elencate in fondo al verbale.
+- **Verbale scritto dall'AI locale** (Ollama, per esempio `qwen3.5:9b`). A fine riunione scrive presenti, punti discussi, decisioni e azioni (chi, cosa, entro quando). Gira quando la GPU è libera e si interrompe se parte una diretta.
+- **Riassunto «Finora» durante la riunione.** Ogni 5 minuti, con un modello piccolo sulla CPU.
+- **Passaporta.** Si sceglie il progetto all'inizio della diretta: il suo glossario (nomi, partner, temi) va a Whisper e al verbale. Con «Manda a Passaporta» il verbale diventa una pagina in *Verbali* e le azioni diventano task nel Gantt. Rimandarlo aggiorna pagina e task, senza doppioni. Passaporta è l'app interna di wiki e Gantt; senza di lei tutto il resto funziona.
+- **Segue il muto di Teams** tramite l'API locale per app di terze parti del nuovo Teams. Va attivata in Teams: Impostazioni → Privacy → Gestisci API.
+- **Valutazione.** Si corregge a mano qualche minuto mentre lo si ascolta, e Sonorus calcola **WER e cpWER** di diretta, verbale rifinito, unione per tratti e unione parola per parola. Il totale su più riunioni si ottiene con `tools/valuta.py --riferimenti`.
+- Glossario generale e per progetto, archivio, rinomina degli speaker, export in `.md`, `.json` e `.srt`.
 
 ## Prima valutazione
 
@@ -20,7 +26,7 @@ Dettagli e limiti in [`docs/valutazione.md`](docs/valutazione.md); si può rifar
 
 ## Installazione
 
-Serve Windows 10/11, Python 3.12, una GPU NVIDIA (si ripiega sulla CPU con il modello `small`) e, per i verbali rifiniti, Neon Minutes installato in `%LOCALAPPDATA%\Programs\Neon Minutes`.
+Serve Windows 10/11, Python 3.12 e una GPU NVIDIA (senza, si ripiega sulla CPU con il modello `small`). Per i verbali rifiniti serve Neon Minutes nella sottocartella `neon-minutes\`; vale anche l'installazione standard in `%LOCALAPPDATA%\Programs\Neon Minutes`, oppure la variabile `SONORUS_NEON`. Per il verbale scritto dall'AI e per i riassunti serve [Ollama](https://ollama.com).
 
 ```bat
 install.bat
@@ -34,7 +40,12 @@ Crea `.venv`, scarica il modello e mette l'icona sul Desktop.
 |---|---|
 | `app.py` | Finestra pywebview, coda delle rifiniture, GPU condivisa, pausa microfono, hotkey |
 | `engine.py` | Cattura, segmentatore, trascrittore, sessione, ritrascrizione dalle tracce |
-| `merge.py` | Unisce diretta e verbale rifinito (pure Python, si prova anche fuori da Windows) |
+| `merge.py` | Unisce diretta e verbale rifinito, per tratti e parola per parola (solo libreria standard) |
+| `llm.py` | Verbale e riassunti con Ollama |
+| `passaporta.py` | Progetti, glossario per progetto, invio del verbale e dei task |
+| `teams.py` | Segue il muto di Teams (WebSocket locale su 127.0.0.1:8124) |
+| `evalkit.py` | WER e cpWER sui tratti corretti a mano |
+| `tools/valuta.py` | Statistiche di una sessione e totale dei riferimenti |
 | `neon_worker.py` | Ponte verso Neon Minutes, con i fix per GPU da 4 GB |
 | `static/index.html` | Interfaccia |
 
@@ -49,7 +60,7 @@ Sonorus è rilasciato con licenza MIT: puoi usarlo, modificarlo e ridistribuirlo
   author  = {Baldini, Benedetta},
   title   = {Sonorus: trascrizione locale delle riunioni con diretta a due canali e verbale rifinito},
   year    = {2026},
-  version = {1.0.0},
+  version = {1.1.0},
   url     = {https://github.com/bbaldini/sonorus},
   license = {MIT}
 }
