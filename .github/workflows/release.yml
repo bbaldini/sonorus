@@ -31,6 +31,24 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then pulseaudio --start --exit-idle-time=-1 || true; fi
           python tests/selftest.py
+      - name: Installer (Linux, macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          SONORUS_SKIP_MODEL: "1"
+        run: |
+          ./install.sh
+          if [ "$RUNNER_OS" = "macOS" ]; then test -x "$HOME/Applications/Sonorus.app/Contents/MacOS/Sonorus"; else test -f "$HOME/.local/share/applications/sonorus.desktop"; fi
+          .venv/bin/python -c "import engine, app; print('installer ok', engine.APPDATA)"
+      - name: Installer (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        env:
+          SONORUS_SKIP_MODEL: "1"
+        run: |
+          call install.bat
+          if not exist "%USERPROFILE%\Desktop\Sonorus.lnk" exit /b 1
+          .venv\Scripts\python -c "import engine, app; print('installer ok', engine.APPDATA)"
 
   release:
     needs: test

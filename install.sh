@@ -18,9 +18,11 @@ from PIL import Image
 im = Image.open("sonorus.ico"); im.size = max(im.info.get("sizes", [im.size])); im.load()
 im.convert("RGBA").resize((512, 512)).save("sonorus.png")
 PY
-echo "Scarico il modello di trascrizione (una volta sola, 0,5–1,6 GB)…"
-if [ "$(uname)" = "Darwin" ]; then MODEL=small; else MODEL=large-v3-turbo; fi
-.venv/bin/python -c "import engine; from faster_whisper import WhisperModel; WhisperModel('$MODEL', device='cpu', compute_type='int8', download_root=str(engine.MODEL_DIR))"
+if [ "${SONORUS_SKIP_MODEL:-0}" != 1 ]; then  # la CI salta i 1,6 GB del modello
+  echo "Scarico il modello di trascrizione (una volta sola, 0,5–1,6 GB)…"
+  if [ "$(uname)" = "Darwin" ]; then MODEL=small; else MODEL=large-v3-turbo; fi
+  .venv/bin/python -c "import engine; from faster_whisper import WhisperModel; WhisperModel('$MODEL', device='cpu', compute_type='int8', download_root=str(engine.MODEL_DIR))"
+fi
 
 if [ "$(uname)" = "Darwin" ]; then
   APP="$HOME/Applications/Sonorus.app"
