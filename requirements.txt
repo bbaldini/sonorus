@@ -1,0 +1,7 @@
+faster-whisper
+pyaudiowpatch
+soxr
+pywebview
+pillow
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*

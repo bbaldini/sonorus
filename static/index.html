@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Sonorus</title>
+<style>
+:root{
+  --bg:#0f0d16; --panel:#18151f; --panel2:#211d2b; --line:#2e2939; --text:#ece8f4; --muted:#9d95ad;
+  --gold:#e8b956; --me:#ff7aa8; --oth:#5fd3d8; --red:#ff5c6c; --green:#5fd38a; --sel:#2a2438;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f6f3ec; --panel:#fffdf8; --panel2:#f0ebe0; --line:#ddd5c4; --text:#2a2433; --muted:#776e86;
+        --gold:#a8740f; --me:#c2336a; --oth:#137b80; --red:#c8283a; --green:#1d8a4b; --sel:#ece4d3;}
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:15px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+body{display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{display:flex;align-items:center;gap:8px;font-family:Georgia,"Palatino Linotype",serif;font-size:21px;color:var(--gold);letter-spacing:.5px}
+.tabs{display:flex;gap:4px;margin-left:8px}
+.tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;padding:6px 10px;color:var(--muted)}
+.tab.on{color:var(--text);border-bottom-color:var(--gold)}
+.tab:hover{border-color:var(--line)} .tab.on:hover{border-bottom-color:var(--gold)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--gold);color:#1c1606;font-size:11.5px;font-weight:600;text-align:center}
+.status{font-size:12.5px;color:var(--muted);padding:3px 10px;border:1px solid var(--line);border-radius:99px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+.status.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent)}
+.spacer{flex:1}
+.meters{display:flex;gap:12px}
+.meter{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.meter .bar{width:64px;height:6px;border-radius:3px;background:var(--panel2);overflow:hidden}
+.meter .bar i{display:block;height:100%;width:0;transition:width .12s}
+.meter.me i{background:var(--me)} .meter.oth i{background:var(--oth)}
+.view{flex:1;display:none;flex-direction:column;min-height:0}
+.view.on{display:flex}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line)}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--gold) 60%,transparent);outline-offset:0}
+#title{flex:1;min-width:180px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:7px 13px}
+button:hover{border-color:var(--gold)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--gold);color:#1c1606;border:none;font-weight:600}
+#go{padding:8px 20px;min-width:150px}
+#go.rec{background:var(--red);color:#fff}
+#timer{font-variant-numeric:tabular-nums;color:var(--muted);min-width:56px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor;margin-right:7px;vertical-align:1px}
+#go.rec .dot{animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.scroll{flex:1;overflow-y:auto;padding:18px 22px 40px}
+.empty{color:var(--muted);text-align:center;margin-top:10vh;line-height:1.8}
+.empty b{color:var(--text)}
+.line{display:grid;grid-template-columns:64px 1fr;gap:2px 12px;margin:0 0 12px}
+.ts{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;padding-top:3px}
+.who{font-weight:600;font-size:13px}
+.me .who{color:var(--me)} .others .who{color:var(--oth)}
+.txt{grid-column:2}
+.partial .txt{color:var(--muted);font-style:italic}
+.partial .who::after{content:" · sta parlando…";font-weight:400;color:var(--muted)}
+.bar-foot{display:flex;flex-wrap:wrap;gap:8px;padding:10px 18px;border-top:1px solid var(--line);background:var(--panel);align-items:center}
+.hint{font-size:12.5px;color:var(--muted)}
+#lag{color:var(--gold)}
+.jobchip{font-size:12.5px;color:var(--muted);cursor:pointer}
+.jobchip b{color:var(--text);font-weight:600}
+/* archivio */
+.arch{flex:1;display:grid;grid-template-columns:320px 1fr;min-height:0}
+.list{border-right:1px solid var(--line);overflow-y:auto;background:var(--panel)}
+.list-head{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+.item{padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.item:hover{background:var(--panel2)} .item.sel{background:var(--sel)}
+.item .t{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .m{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.pill{font-size:11px;padding:0 7px;border-radius:99px;border:1px solid var(--line)}
+.pill.done{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,transparent)}
+.pill.running{color:var(--gold);border-color:var(--gold)}
+.pill.error{color:var(--red);border-color:var(--red)}
+.prog{height:4px;background:var(--panel2);border-radius:2px;margin-top:6px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--gold);transition:width .4s}
+.detail{display:flex;flex-direction:column;min-height:0}
+.dhead{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.dhead h2{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:20px;flex-basis:100%}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:none;border-radius:0;padding:5px 12px}
+.seg button.on{background:var(--gold);color:#1c1606}
+.speakers{display:flex;flex-wrap:wrap;gap:8px;padding:12px 22px;border-bottom:1px solid var(--line);background:var(--panel)}
+.spk{display:flex;align-items:center;gap:6px;font-size:13px}
+.spk input{width:150px;padding:4px 8px}
+.spk small{color:var(--muted)}
+.sw{width:10px;height:10px;border-radius:50%}
+/* impostazioni */
+#drawer{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:5}
+#drawer.open{display:block}
+#drawer .box{position:absolute;right:0;top:0;bottom:0;width:min(440px,100%);background:var(--panel);border-left:1px solid var(--line);padding:18px 20px;overflow-y:auto}
+#drawer h2{font-family:Georgia,serif;color:var(--gold);font-weight:normal;margin:0 0 14px}
+.f{margin:0 0 14px;display:flex;flex-direction:column;gap:5px}
+.f label{font-size:13px;color:var(--muted)}
+.f select,.f input,.f textarea{width:100%}
+.row{display:flex;gap:8px}
+.chk{display:flex;gap:9px;align-items:flex-start;font-size:14px;margin:0 0 12px}
+.chk input{margin-top:4px}
+.chk small{display:block;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:8px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+.err{color:var(--red)}
+#mic{display:none}
+#mic.show{display:inline-block}
+#mic.off{background:color-mix(in srgb,var(--me) 22%,var(--panel2));border-color:var(--me);color:var(--me);font-weight:600}
+.meter.paused span{color:var(--me);text-decoration:line-through}
+.sysline{text-align:center;color:var(--muted);font-size:12.5px;margin:4px 0 14px}
+.sysline b{color:var(--me);font-weight:600}
+.fromlive .txt{font-style:italic;color:var(--muted)}
+@media (max-width:760px){ .arch{grid-template-columns:1fr} .list{max-height:38vh;border-right:none;border-bottom:1px solid var(--line)} .meters{display:none} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 20c4-1 7-4 9-8l6-8c-4 1-8 3-10 7l-2 5"/><path d="M4 20l5-5"/><path d="M8 12h5"/></svg>Sonorus</div>
+  <nav class="tabs">
+    <button class="tab on" data-v="live">Diretta</button>
+    <button class="tab" data-v="arch">Archivio<span class="badge" id="qbadge" hidden></span></button>
+  </nav>
+  <span class="status" id="status">Avvio…</span>
+  <div class="spacer"></div>
+  <div class="meters">
+    <div class="meter me"><span id="lblMe">Io</span><div class="bar"><i id="mMe"></i></div></div>
+    <div class="meter oth"><span id="lblOth">Altri</span><div class="bar"><i id="mOth"></i></div></div>
+  </div>
+</header>
+
+<!-- DIRETTA -->
+<section class="view on" id="v-live">
+  <div class="controls">
+    <input id="title" placeholder="Titolo della riunione (facoltativo)">
+    <select id="lang" title="Lingua della riunione">
+      <option value="it">Italiano</option><option value="en">English</option><option value="es">Español</option>
+      <option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option>
+      <option value="auto">Rileva lingua</option>
+    </select>
+    <span id="timer"></span>
+    <button id="mic" title="Ctrl+Alt+M da qualsiasi finestra, anche da Teams">🎙️ Microfono attivo</button>
+    <button id="go" class="primary" disabled><span class="dot"></span>Inizia ad ascoltare</button>
+  </div>
+  <main class="scroll" id="out">
+    <div class="empty" id="empty">
+      Premi <b>Inizia ad ascoltare</b> e avvia la riunione come al solito.<br>
+      Sonorus sente <b style="color:var(--oth)">l'audio del PC</b> (gli altri) e <b style="color:var(--me)">il tuo microfono</b> (tu).<br>
+      A fine riunione prepara da solo il <b>verbale con le voci separate</b>: lo trovi in Archivio.<br>
+      Tutto resta sul tuo computer. Con le cuffie la separazione è migliore.<br>
+      Quando ti metti in muto su Teams premi anche <b>Ctrl+Alt+M</b>: Sonorus smette di sentirti finché non lo ripremi.
+    </div>
+  </main>
+  <div class="bar-foot">
+    <button id="copy">Copia testo</button>
+    <button id="folder">Apri cartella</button>
+    <span class="hint" id="lag"></span>
+    <div class="spacer"></div>
+    <span class="jobchip" id="jobchip"></span>
+    <button id="settings">Impostazioni</button>
+  </div>
+</section>
+
+<!-- ARCHIVIO -->
+<section class="view" id="v-arch">
+  <div class="arch">
+    <div class="list">
+      <div class="list-head">
+        <button class="primary" id="addFiles" style="flex:1">+ Aggiungi registrazioni…</button>
+      </div>
+      <div id="items"></div>
+    </div>
+    <div class="detail" id="detail">
+      <div class="empty" style="margin:12vh 24px">
+        Qui trovi le riunioni trascritte in diretta e i verbali rifiniti.<br>
+        Con <b>Aggiungi registrazioni</b> puoi trascrivere anche i video di Teams (mp4):<br>
+        i nomi di chi parla vengono letti dal riquadro viola di Teams.
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="drawer"><div class="box">
+  <h2>Impostazioni</h2>
+  <div class="f"><label>Audio degli altri (cosa esce dal PC)</label><select id="outDev"></select></div>
+  <div class="f"><label>Il tuo microfono</label><select id="micDev"></select></div>
+  <div class="row">
+    <div class="f" style="flex:1"><label>Il tuo nome</label><input id="meName"></div>
+    <div class="f" style="flex:1"><label>Nome per gli altri</label><input id="othName"></div>
+  </div>
+  <div class="f"><label>Pausa che chiude una frase: <span id="pauseV"></span> s</label>
+    <input id="pause" type="range" min="0.4" max="1.5" step="0.1"></div>
+  <div class="f"><label>Glossario: nomi, sigle, termini tecnici (uno per riga)</label>
+    <textarea id="glossary" rows="5" placeholder="IFAB&#10;AIND&#10;data lake"></textarea></div>
+  <label class="chk"><input type="checkbox" id="autoRefine"><span>Verbale rifinito a fine riunione<small>Separa le voci e riconosce le persone già note. Serve l'audio salvato. Se inizi un'altra diretta si mette in pausa e poi riprende.</small></span></label>
+  <label class="chk"><input type="checkbox" id="saveAudio"><span>Salva l'audio della riunione<small>registrazione.wav, circa 115 MB all'ora.</small></span></label>
+  <label class="chk"><input type="checkbox" id="echo"><span>Filtro eco<small>Se usi gli altoparlanti invece delle cuffie, evita di attribuire a te le voci degli altri.</small></span></label>
+  <label class="chk"><input type="checkbox" id="onTop"><span>Finestra sempre in primo piano</span></label>
+  <div class="f"><label>Cartella delle riunioni in diretta</label>
+    <div class="row"><input id="outDir" style="flex:1"><button id="pick">Scegli…</button></div></div>
+  <p class="hint">Se nel tuo nome lasci "Io", Sonorus non prova a riconoscere la tua voce nei verbali.</p>
+  <div class="row" style="justify-content:flex-end;margin-top:8px"><button id="close">Chiudi</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let api, cfg, devs, since = 0, running = false, t0 = 0, lastDir = null, jobsSig = '', jobs = [], selJob = null, viewMode = null, neon = true;
+const partials = {};
+const out = $('out');
+const PALETTE = ['#5fd3d8','#ff7aa8','#e8b956','#9d8cff','#5fd38a','#ff9f5a','#6fb3ff','#d77bff'];
+
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2800); }
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nearBottom = el => el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+function fmt(s){ s=Math.max(0,Math.floor(s)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+function hms(s){ s=Math.floor(s); return [Math.floor(s/3600), Math.floor(s%3600/60), s%60].map(v=>String(v).padStart(2,'0')).join(':'); }
+function eta(j){
+  if (!j || !j.started) return '';
+  const el = Date.now()/1000 - j.started, f = j.progress || 0;
+  let rem = f > 0.05 ? el*(1-f)/f : (j.expected ? j.expected - el : null);
+  if (rem == null) return '';
+  rem = Math.max(5, rem);
+  return rem < 60 ? 'meno di un minuto' : `circa ${Math.round(rem/60)} min`;
+}
+
+/* ---------------- tabs */
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => showView(b.dataset.v));
+function showView(v){
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $('v-live').classList.toggle('on', v === 'live'); $('v-arch').classList.toggle('on', v === 'arch');
+  if (v === 'arch') refreshJobs(true);
+}
+
+/* ---------------- diretta */
+function lineEl(ev){
+  const d = document.createElement('div');
+  d.className = `line ${ev.src}` + (ev.kind==='partial' ? ' partial' : '');
+  d.dataset.t = ev.t;
+  d.innerHTML = `<span class="ts">${ev.ts}</span><span class="who">${esc(ev.name)}</span><span class="ts"></span><span class="txt">${esc(ev.text)}</span>`;
+  return d;
+}
+function insertSorted(el){
+  const t = parseFloat(el.dataset.t);
+  const finals = [...out.querySelectorAll('.line:not(.partial)')];
+  let after = null;
+  for (let i = finals.length - 1; i >= 0; i--) if (parseFloat(finals[i].dataset.t) <= t) { after = finals[i]; break; }
+  if (after) after.after(el); else if (finals.length) finals[0].before(el); else out.prepend(el);
+}
+function handle(ev){
+  $('empty')?.remove();
+  const stick = nearBottom(out);
+  if (ev.kind === 'mute'){
+    const d = document.createElement('div'); d.className = 'sysline';
+    d.innerHTML = ev.paused ? `${ev.ts} · <b>microfono in pausa</b>: la tua voce non viene registrata` : `${ev.ts} · microfono di nuovo attivo`;
+    out.append(d); if (stick) out.scrollTop = out.scrollHeight; return;
+  }
+  if (ev.kind === 'partial'){
+    if (!ev.text) return;
+    if (!partials[ev.src]){ partials[ev.src] = lineEl(ev); out.append(partials[ev.src]); }
+    else { partials[ev.src].querySelector('.txt').textContent = ev.text; }
+  } else {
+    partials[ev.src]?.remove(); delete partials[ev.src];
+    if (ev.text) insertSorted(lineEl(ev));
+  }
+  Object.values(partials).forEach(p => out.append(p));
+  if (stick) out.scrollTop = out.scrollHeight;
+}
+function meter(id, db){ $(id).style.width = Math.max(0, Math.min(100, (db + 60) / 50 * 100)) + '%'; }
+
+async function tick(){
+  try{
+    const r = await api.poll(since);
+    r.events.forEach(handle); since += r.events.length;
+    $('status').textContent = r.status; $('status').classList.toggle('ok', r.ready && /^(Pronto|In ascolto)/.test(r.status));
+    $('go').disabled = !running && !r.ready && !r.job && !r.queued;
+    if (r.levels){ meter('mMe', r.levels.me ?? -90); meter('mOth', r.levels.others ?? -90); }
+    else { meter('mMe', -90); meter('mOth', -90); }
+    $('lag').textContent = r.lag > 1 ? `in coda: ${r.lag} frasi` : '';
+    if (r.errors && r.errors.length) $('lag').innerHTML = `<span class="err">${esc(r.errors.join(' · '))}</span>`;
+    if (running) $('timer').textContent = fmt((Date.now()-t0)/1000);
+    $('mic').classList.toggle('show', running);
+    const mp = !!(running && r.mic_paused);
+    $('mic').classList.toggle('off', mp);
+    $('mic').textContent = mp ? '🔇 Microfono in pausa' : '🎙️ Microfono attivo';
+    document.querySelector('.meter.me').classList.toggle('paused', mp);
+    const n = (r.job ? 1 : 0) + r.queued;
+    $('qbadge').hidden = !n; $('qbadge').textContent = n;
+    $('jobchip').innerHTML = r.job ? `Rifinisco <b>${esc(r.job.title)}</b> · ${Math.round((r.job.progress||0)*100)}% · ${eta(r.job)}` : '';
+    if (r.jobs_sig !== jobsSig){ jobsSig = r.jobs_sig; refreshJobs(false); }
+  }catch(e){ console.error(e); }
+  setTimeout(tick, 400);
+}
+
+function fillDevices(){
+  const sel = (el, list, saved) => {
+    el.innerHTML = '<option value="">— nessuno —</option>' + list.map(d => `<option value="${d.index}">${esc(d.name)}${d.default?' (predefinito)':''}</option>`).join('');
+    const pick = list.find(d => d.name === saved) || list.find(d => d.default) || list[0];
+    if (pick) el.value = pick.index;
+  };
+  sel($('outDev'), devs.outputs, cfg.output_name);
+  sel($('micDev'), devs.mics, cfg.mic_name);
+}
+function devName(el, list){ const d = list.find(x => String(x.index) === el.value); return d ? d.name : null; }
+function readSettings(){
+  return { output_name: devName($('outDev'), devs.outputs), mic_name: devName($('micDev'), devs.mics),
+    me_name: $('meName').value.trim() || 'Io', others_name: $('othName').value.trim() || 'Altri',
+    pause: parseFloat($('pause').value), glossary: $('glossary').value, echo_guard: $('echo').checked,
+    save_audio: $('saveAudio').checked, auto_refine: $('autoRefine').checked, on_top: $('onTop').checked,
+    out_dir: $('outDir').value.trim(), language: $('lang').value };
+}
+function applyLabels(){ $('lblMe').textContent = $('meName').value || 'Io'; $('lblOth').textContent = $('othName').value || 'Altri'; }
+
+async function start(){
+  const s = readSettings();
+  const c = {...s, title: $('title').value.trim(),
+    output_index: $('outDev').value === '' ? null : +$('outDev').value,
+    mic_index: $('micDev').value === '' ? null : +$('micDev').value};
+  if (c.output_index === null && c.mic_index === null) return toast('Scegli almeno una sorgente nelle Impostazioni');
+  $('go').disabled = true; $('go').textContent = 'Preparo…';
+  const r = await api.start(c);
+  $('go').disabled = false;
+  if (!r.ok){ $('go').innerHTML = '<span class="dot"></span>Inizia ad ascoltare'; return toast(r.error); }
+  out.innerHTML = ''; since = 0; Object.keys(partials).forEach(k => delete partials[k]);
+  running = true; t0 = Date.now(); lastDir = r.dir;
+  $('go').classList.add('rec'); $('go').innerHTML = '<span class="dot"></span>Ferma e salva';
+  $('title').disabled = true; $('lang').disabled = true;
+}
+async function stop(){
+  $('go').disabled = true; $('go').textContent = 'Salvo…';
+  const r = await api.stop();
+  running = false; lastDir = r.dir || lastDir;
+  $('go').classList.remove('rec'); $('go').innerHTML = '<span class="dot"></span>Inizia ad ascoltare'; $('go').disabled = false;
+  $('title').disabled = false; $('lang').disabled = false; $('timer').textContent = '';
+  toast($('autoRefine').checked && $('saveAudio').checked && neon ? 'Salvata. Il verbale rifinito si prepara in Archivio.' : 'Trascrizione salvata');
+  if (r.job) selJob = r.job;
+}
+
+/* ---------------- archivio */
+const SOURCE = {manual:'scritto a mano', video:'dal video Teams', voice:'voce riconosciuta'};
+const STATUS = {queued:'in coda', running:'in corso', done:'verbale pronto', error:'errore', live:'solo diretta', cancelled:'annullato'};
+async function refreshJobs(force){
+  if (!api) return;
+  jobs = await api.list_jobs();
+  const items = $('items');
+  items.innerHTML = jobs.length ? '' : '<p class="hint" style="padding:14px">Ancora nessuna riunione.</p>';
+  for (const j of jobs){
+    const d = document.createElement('div');
+    d.className = 'item' + (j.id === selJob ? ' sel' : '');
+    const when = new Date(j.added*1000).toLocaleString('it-IT', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+    const st = j.status === 'queued' && j.paused ? 'in pausa' : STATUS[j.status] || j.status;
+    d.innerHTML = `<div class="t">${esc(j.title)}</div>
+      <div class="m"><span>${j.kind==='live'?'Diretta':'Registrazione'} · ${when}</span><span class="pill ${j.status}">${st}</span>${j.status==='running'?`<span>${eta(j)}</span>`:''}</div>
+      ${j.status==='running' ? `<div class="prog"><i style="width:${Math.round((j.progress||0)*100)}%"></i></div>` : ''}`;
+    d.onclick = () => { selJob = j.id; viewMode = null; refreshJobs(true); };
+    items.append(d);
+  }
+  if (selJob && (force || jobs.find(j => j.id === selJob)?.status !== 'running')) showDetail(selJob);
+}
+function colorFor(map, name){ if (!(name in map)) map[name] = PALETTE[Object.keys(map).length % PALETTE.length]; return map[name]; }
+async function showDetail(id){
+  const r = await api.job_detail(id);
+  const det = $('detail');
+  if (!r){ det.innerHTML = ''; return; }
+  const j = r.job;
+  if (!viewMode) viewMode = r.verbale ? 'verbale' : 'live';
+  const canRefine = neon && j.status !== 'running' && j.status !== 'queued';
+  let html = `<div class="dhead"><h2>${esc(j.title)}</h2>`;
+  if (r.live && r.verbale) html += `<div class="seg"><button data-m="verbale" class="${viewMode==='verbale'?'on':''}">Verbale</button><button data-m="live" class="${viewMode==='live'?'on':''}">Diretta</button></div>`;
+  if (j.status === 'running') html += `<span class="hint">Rifinitura ${Math.round((j.progress||0)*100)}% · ${eta(j)}</span><button data-a="cancel">Annulla</button>`;
+  if (j.status === 'queued') html += `<span class="hint">${j.paused ? 'In pausa: riprende appena finisce la diretta' : 'In coda'}</span><button data-a="cancel">Annulla</button>`;
+  if (j.status === 'error') html += `<span class="err">${esc(j.error)}</span>`;
+  if (canRefine && !r.verbale) html += `<button class="primary" data-a="refine">Prepara il verbale con le voci</button>`;
+  if (r.relive) html += `<span class="hint">Rifaccio la diretta…</span>`;
+  else if (r.tracks && j.status !== 'running') html += `<button data-a="relive" title="Ritrascrive dalle tracce salvate con glossario e filtri attuali">Rifai la diretta</button>`;
+  html += `<div class="spacer"></div><button data-a="open">Apri file</button><button data-a="folder">Cartella</button><button data-a="remove" title="Toglie dall'elenco, i file restano">Togli</button></div>`;
+  if (viewMode === 'verbale' && r.speakers){
+    const cmap = {};
+    html += `<div class="speakers">` + r.speakers.map(s => `<label class="spk"><span class="sw" style="background:${colorFor(cmap, s.name)}"></span>
+      <input data-c="${esc(s.id)}" value="${esc(s.name)}"><small>${hms(s.speech_s)}${SOURCE[s.source]?' · '+SOURCE[s.source]:''}</small></label>`).join('') +
+      `<button data-a="rename">Salva nomi</button></div>`;
+    html += `<div class="scroll">` + (r.verbale || []).map(p => `<div class="line${/\(dalla diretta\)$/.test(p.speaker)?' fromlive':''}"><span class="ts">${hms(p.start)}</span>
+      <span class="who" style="color:${colorFor(cmap, p.speaker)}">${esc(p.speaker)}</span><span class="ts"></span><span class="txt">${esc(p.text)}</span></div>`).join('') + `</div>`;
+  } else if (r.live){
+    html += `<div class="scroll">` + (r.live.lines.length ? r.live.lines.map(l => `<div class="line ${l.src}"><span class="ts">${l.ts}</span>
+      <span class="who">${esc(l.name)}</span><span class="ts"></span><span class="txt">${esc(l.text)}</span></div>`).join('') : '<p class="hint">Nessuna frase trascritta.</p>') + `</div>`;
+  } else {
+    html += `<div class="scroll">` + (j.status === 'error' ? '' : `<p class="hint">Il verbale comparirà qui quando la rifinitura è finita.</p>`) +
+      (j.log && j.log.length ? `<pre class="hint" style="white-space:pre-wrap">${esc(j.log.slice(-12).join('\n'))}</pre>` : '') + `</div>`;
+  }
+  det.innerHTML = html;
+  det.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { viewMode = b.dataset.m; showDetail(id); });
+  det.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+    const a = b.dataset.a;
+    if (a === 'refine'){ await api.refine(id); toast('Messo in coda'); }
+    if (a === 'relive'){ const x = await api.retranscribe(id); toast(x.ok ? 'Rifaccio la diretta: lo stato è in alto' : x.error);
+      if (x.ok){ const w = setInterval(async () => { if (!(await api.relive_state())){ clearInterval(w); showDetail(id); } }, 1500); } }
+    if (a === 'cancel') await api.cancel(id);
+    if (a === 'open') api.open_file(id, viewMode === 'verbale' ? 'md' : 'live');
+    if (a === 'folder') api.open_job_folder(id);
+    if (a === 'remove'){ await api.remove(id); selJob = null; det.innerHTML = ''; }
+    if (a === 'rename'){
+      const names = {}; det.querySelectorAll('.spk input').forEach(i => names[i.dataset.c] = i.value);
+      await api.rename_speakers(id, names); toast('Aggiorno il verbale con i nuovi nomi…');
+    }
+    refreshJobs(true);
+  });
+}
+$('addFiles').onclick = async () => {
+  const ids = await api.add_files($('lang').value);
+  if (ids.length){ selJob = ids[0]; viewMode = null; toast(ids.length === 1 ? 'Aggiunta alla coda' : `${ids.length} registrazioni in coda`); refreshJobs(true); }
+};
+$('jobchip').onclick = () => showView('arch');
+
+/* ---------------- avvio */
+window.addEventListener('pywebviewready', async () => {
+  api = window.pywebview.api;
+  const r = await api.init();
+  cfg = r.cfg; devs = r.devices; neon = r.neon;
+  if (devs.error) toast('Audio: ' + devs.error);
+  if (r.hotkey === false) $('mic').title = 'Ctrl+Alt+M è già usato da un altro programma: usa il pulsante';
+  if (!neon){ $('addFiles').disabled = true; $('addFiles').title = 'Serve Neon Minutes installato'; }
+  fillDevices();
+  $('lang').value = cfg.language; $('meName').value = cfg.me_name; $('othName').value = cfg.others_name;
+  $('pause').value = cfg.pause; $('pauseV').textContent = cfg.pause; $('glossary').value = cfg.glossary;
+  $('echo').checked = cfg.echo_guard; $('saveAudio').checked = cfg.save_audio; $('onTop').checked = cfg.on_top;
+  $('autoRefine').checked = cfg.auto_refine;
+  $('outDir').value = cfg.out_dir; $('outDir').placeholder = r.default_out;
+  applyLabels();
+  tick();
+});
+$('go').onclick = () => running ? stop() : start();
+$('mic').onclick = () => api.toggle_mic();
+$('settings').onclick = () => $('drawer').classList.add('open');
+const closeDrawer = async () => { if (!$('drawer').classList.contains('open')) return;
+  $('drawer').classList.remove('open'); applyLabels(); cfg = await api.save_settings(readSettings());
+  if (running){ api.rename('me_name', $('meName').value || 'Io'); api.rename('others_name', $('othName').value || 'Altri'); } };
+$('close').onclick = closeDrawer;
+$('drawer').onclick = e => { if (e.target.id === 'drawer') closeDrawer(); };
+$('pause').oninput = () => $('pauseV').textContent = $('pause').value;
+$('pick').onclick = async () => { const p = await api.pick_folder(); if (p) $('outDir').value = p; };
+$('folder').onclick = () => api.open_folder(lastDir);
+$('copy').onclick = async () => {
+  const txt = [...out.querySelectorAll('.line:not(.partial)')].map(l =>
+    `[${l.children[0].textContent}] ${l.children[1].textContent}: ${l.children[3].textContent}`).join('\n');
+  if (!txt) return toast('Ancora niente da copiare');
+  await navigator.clipboard.writeText(txt); toast('Copiato negli appunti');
+};
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+</script>
+</body>
+</html>
