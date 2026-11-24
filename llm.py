@@ -29,33 +29,53 @@ def models(url=DEFAULT_URL):
 
 
 def chat(messages, model, url=DEFAULT_URL, options=None, fmt=None, stop_ev=None, on_token=None, keep_alive=None):
-    """Chiamata in streaming, interrompibile con stop_ev (la diretta ha la precedenza)."""
+    """Chiamata in streaming, interrompibile con stop_ev (la diretta ha la precedenza).
+    La lettura gira in un thread a parte: un modello sulla CPU può metterci minuti a
+    produrre il primo token, e l'interruzione deve essere immediata anche in quel caso."""
     body = {"model": model, "messages": messages, "stream": True, "think": False, "options": options or {}}
     if fmt is not None:
         body["format"] = fmt
     if keep_alive is not None:
         body["keep_alive"] = keep_alive
     req = urllib.request.Request(url + "/api/chat", json.dumps(body).encode(), {"Content-Type": "application/json"})
-    out = []
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            for line in r:
-                if stop_ev is not None and stop_ev.is_set():
-                    raise Cancelled()
-                if not line.strip():
-                    continue
-                ev = json.loads(line)
-                if ev.get("error"):
-                    raise RuntimeError(ev["error"])
-                tok = ev.get("message", {}).get("content", "")
-                if tok:
-                    out.append(tok)
-                    if on_token:
-                        on_token(len(out))
-                if ev.get("done"):
-                    break
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Ollama: {e.read().decode(errors='replace')[:300]}") from e
+    out, box, done = [], {}, threading.Event()
+
+    def worker():
+        try:
+            with urllib.request.urlopen(req, timeout=900) as r:
+                box["resp"] = r
+                for line in r:
+                    if not line.strip():
+                        continue
+                    ev = json.loads(line)
+                    if ev.get("error"):
+                        raise RuntimeError(ev["error"])
+                    tok = ev.get("message", {}).get("content", "")
+                    if tok:
+                        out.append(tok)
+                        if on_token:
+                            on_token(len(out))
+                    if ev.get("done") or box.get("cancel"):
+                        break
+        except urllib.error.HTTPError as e:
+            box["err"] = RuntimeError(f"Ollama: {e.read().decode(errors='replace')[:300]}")
+        except Exception as e:  # noqa: BLE001
+            box["err"] = e
+        finally:
+            done.set()
+
+    threading.Thread(target=worker, daemon=True).start()
+    while not done.wait(0.25):
+        if stop_ev is not None and stop_ev.is_set():
+            box["cancel"] = True
+            try:  # chiudere la connessione fa smettere Ollama di generare
+                if box.get("resp"):
+                    box["resp"].close()
+            except Exception:  # noqa: BLE001
+                pass
+            raise Cancelled()
+    if box.get("err") and not box.get("cancel"):
+        raise box["err"]
     return "".join(out)
 
 
