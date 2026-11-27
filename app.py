@@ -813,13 +813,24 @@ class Api:
             if f.exists():
                 open_path(str(f))
 
+    def show_window(self):
+        """Dalla pagina in Passaporta: mostra la finestra di Sonorus (anche se era stata avviata nascosta)."""
+        if self.window is not None:
+            self.window.show()
+            self.window.restore()
+        return True
+
 
 def main():
+    import web
     api = Api()
+    # --nascosto: avviato da Passaporta, si usa dalla sua pagina; la finestra si apre con «Apri in finestra»
+    hidden = "--nascosto" in sys.argv
     win = webview.create_window("Sonorus", str(HERE / "static" / "index.html"), js_api=api,
                                 width=1060, height=780, min_size=(600, 480), on_top=api.cfg.get("on_top", False),
-                                background_color="#0f0d16")
+                                background_color="#0f0d16", hidden=hidden)
     api.window = win
+    web.serve(api, HERE / "static")  # la stessa interfaccia su http://127.0.0.1:8795 (per Passaporta)
 
     def on_closing():
         if api.session:
